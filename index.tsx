@@ -357,6 +357,13 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
         }
     }, [route]);
 
+    // Ensure ester is valid when route changes (e.g. switching from Injection to Gel should force E2)
+    useEffect(() => {
+        if (!availableEsters.includes(ester)) {
+            setEster(availableEsters[0]);
+        }
+    }, [availableEsters, ester]);
+
     if (!isOpen) return null;
 
     const tierKey = SL_TIER_ORDER[slTier] || "standard";
@@ -460,7 +467,9 @@ const DoseFormModal = ({ isOpen, onClose, eventToEdit, onSave }: any) => {
                                         </div>
                                     )}
                                     <div className={`space-y-2 ${ester === Ester.E2 ? "col-span-2" : ""}`}>
-                                        <label className="block text-xs font-bold text-pink-500 uppercase tracking-wider">{t('field.dose_e2')}</label>
+                                        <label className="block text-xs font-bold text-pink-500 uppercase tracking-wider">
+                                            {ester === Ester.E2 ? t('field.dose_raw') : t('field.dose_e2')}
+                                        </label>
                                         <input 
                                             type="number" inputMode="decimal"
                                             value={e2Dose} onChange={e => handleE2Change(e.target.value)} 
