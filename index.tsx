@@ -20,7 +20,7 @@ import {
 
 // --- Localization ---
 
-type Lang = 'zh' | 'en';
+type Lang = 'zh' | 'en' | 'ru';
 
 const TRANSLATIONS = {
     zh: {
@@ -114,6 +114,8 @@ const TRANSLATIONS = {
         "ester.EB": "苯甲酸雌二醇 (EB)",
         "ester.EC": "环戊丙酸雌二醇 (EC)",
         "ester.EN": "庚酸雌二醇 (EN)",
+        "drawer.lang": "语言设置",
+        "drawer.lang_hint": "切换界面显示语言。",
     },
     en: {
         "app.title": "HRT Recorder",
@@ -206,6 +208,102 @@ const TRANSLATIONS = {
         "ester.EB": "Estradiol Benzoate (EB)",
         "ester.EC": "Estradiol Cypionate (EC)",
         "ester.EN": "Estradiol Enanthate (EN)",
+        "drawer.lang": "Language",
+        "drawer.lang_hint": "Switch interface language.",
+    },
+    ru: {
+        "app.title": "HRT Recorder",
+        "status.estimate": "Текущая оценка",
+        "status.weight": "Вес",
+        "chart.title": "График концентрации E2 (пг/мл)",
+        "chart.tooltip.conc": "Конц.",
+        "chart.tooltip.time": "Время",
+        "chart.now": "СЕЙЧАС",
+        "chart.reset": "Сброс масштаба",
+        "timeline.title": "История приема",
+        "timeline.empty": "Записей нет. Нажмите +, чтобы добавить.",
+        "timeline.delete_confirm": "Вы уверены, что хотите удалить эту запись?",
+        "timeline.dose_label": "Доза",
+        "timeline.bio_label": "Био E2",
+        "drawer.title": "Управление дозами",
+        "drawer.desc": "Экспорт, резервное копирование, очистка или импорт истории дозировок.",
+        "drawer.clear": "Очистить все дозы",
+        "drawer.clear_confirm": "Удалить все записи о дозировках? Это действие нельзя отменить.",
+        "drawer.save": "Сохранить дозы (JSON)",
+        "drawer.save_hint": "Скачать резервную копию JSON текущего списка.",
+        "drawer.import": "Импортировать дозы (JSON)",
+        "drawer.import_hint": "Загрузить дозы из файла JSON и заменить текущий список.",
+        "drawer.empty_export": "Нет доз для экспорта.",
+        "drawer.import_error": "Ошибка импорта. Пожалуйста, проверьте правильность файла.",
+        "drawer.import_success": "Дозы успешно импортированы.",
+        "drawer.close": "Закрыть панель",
+        "drawer.qr": "QR Импорт/Экспорт",
+        "drawer.qr_hint": "Поделитесь или восстановите свои дозы с помощью QR-кода.",
+        "drawer.lang": "Язык",
+        "drawer.lang_hint": "Переключить язык интерфейса.",
+        "import.title": "Импорт данных",
+        "import.text": "Вставить текст JSON",
+        "import.paste_hint": "Вставьте содержимое JSON сюда...",
+        "import.file": "Выбрать файл JSON",
+        "import.file_btn": "Выберите файл",
+        "qr.title": "QR Импорт и Экспорт",
+        "qr.export.title": "Экспорт доз в QR",
+        "qr.export.empty": "Добавьте хотя бы одну дозу для генерации QR-кода.",
+        "qr.copy": "Копировать JSON",
+        "qr.copied": "Скопировано",
+        "qr.copy_hint": "Вы также можете поделиться необработанным текстом JSON.",
+        "qr.import.title": "Импорт из QR",
+        "qr.import.file": "Загрузить изображение QR",
+        "qr.import.scan": "Начать сканирование камерой",
+        "qr.import.stop": "Остановить сканирование",
+        "qr.scan.hint": "Выровняйте QR-код внутри рамки.",
+        "qr.scan.active": "Камера включена. Наведите на QR-код.",
+        "qr.upload.hint": "Поддерживаются скриншоты PNG/JPEG.",
+        "qr.error.camera": "Ошибка доступа к камере.",
+        "qr.error.decode": "Действительный QR не обнаружен.",
+        "qr.error.format": "Неверный формат QR.",
+        "qr.help": "QR-код содержит ваш JSON с дозировками. Делитесь с осторожностью.",
+        "error.nonPositive": "Значение должно быть больше нуля.",
+
+        "btn.add": "Добавить дозу",
+        "btn.save": "Сохранить запись",
+        "btn.cancel": "Отмена",
+        "btn.edit": "Редактировать",
+
+        "modal.weight.title": "Вес тела",
+        "modal.weight.desc": "Вес используется для расчета объема распределения (Vd ≈ 2.0 л/кг), влияющего на оценку пиковой концентрации.",
+        "modal.dose.add_title": "Добавить дозу",
+        "modal.dose.edit_title": "Редактировать дозу",
+
+        "field.time": "Время",
+        "field.route": "Способ",
+        "field.ester": "Соединение",
+        "field.dose_raw": "Доза (мг)",
+        "field.dose_e2": "Биодоступный E2 (мг)",
+        "field.patch_mode": "Режим ввода",
+        "field.patch_rate": "Скорость (мкг/день)",
+        "field.patch_total": "Общая доза (мг)",
+        "field.sl_duration": "Длительность удержания",
+        "field.sl_custom": "Пользовательский θ",
+
+        "sl.instructions": "Удерживая таблетку в течение рекомендованного времени, старайтесь глотать как можно меньше слюны и продолжайте удерживать растворенную слюну даже после полного растворения таблетки, пока не достигнете целевого времени.",
+        "sl.mode.quick": "2м",
+        "sl.mode.casual": "5м",
+        "sl.mode.standard": "10м",
+        "sl.mode.strict": "15м",
+
+        "route.injection": "Инъекция",
+        "route.oral": "Перорально",
+        "route.sublingual": "Сублингвально",
+        "route.gel": "Гель",
+        "route.patchApply": "Пластырь (Наложение)",
+        "route.patchRemove": "Пластырь (Снятие)",
+
+        "ester.E2": "Эстрадиол (E2)",
+        "ester.EV": "Эстрадиол валерат (EV)",
+        "ester.EB": "Эстрадиол бензоат (EB)",
+        "ester.EC": "Эстрадиол ципионат (EC)",
+        "ester.EN": "Эстрадиол энантат (EN)",
     }
 };
 
@@ -218,7 +316,7 @@ const useTranslation = () => {
 };
 
 const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-    const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('hrt-lang') as Lang) || 'zh');
+    const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('hrt-lang') as Lang) || 'en');
 
     useEffect(() => {
         localStorage.setItem('hrt-lang', lang);
@@ -239,7 +337,8 @@ const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
 // --- Helper Functions ---
 
 const formatDate = (date: Date, lang: Lang) => {
-    return date.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US', { month: 'short', day: 'numeric' });
+    const locale = lang === 'zh' ? 'zh-CN' : (lang === 'ru' ? 'ru-RU' : 'en-US');
+    return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
 };
 
 const formatTime = (date: Date) => {
@@ -806,9 +905,9 @@ const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClo
     );
 };
 
-const QRCodeModal = ({ isOpen, onClose, events, onImportJson }: { isOpen: boolean; onClose: () => void; events: DoseEvent[]; onImportJson: (payload: string) => boolean; }) => {
+const QRCodeModal = ({ isOpen, onClose, events, weight, onImportJson }: { isOpen: boolean; onClose: () => void; events: DoseEvent[]; weight: number; onImportJson: (payload: string) => boolean; }) => {
     const { t } = useTranslation();
-    const dataString = useMemo(() => events.length ? JSON.stringify(events) : '', [events]);
+    const dataString = useMemo(() => events.length ? JSON.stringify({ weight, events }) : '', [events, weight]);
     const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -1343,9 +1442,25 @@ const AppContent = () => {
     const importEventsFromJson = (text: string): boolean => {
         try {
             const parsed = JSON.parse(text);
-            const sanitized = sanitizeImportedEvents(parsed);
-            if (!sanitized.length) throw new Error('No valid entries');
-            setEvents(sanitized);
+            let newEvents: DoseEvent[] = [];
+            let newWeight: number | undefined = undefined;
+
+            if (Array.isArray(parsed)) {
+                newEvents = sanitizeImportedEvents(parsed);
+            } else if (typeof parsed === 'object' && parsed !== null) {
+                if (Array.isArray(parsed.events)) {
+                    newEvents = sanitizeImportedEvents(parsed.events);
+                }
+                if (typeof parsed.weight === 'number' && parsed.weight > 0) {
+                    newWeight = parsed.weight;
+                }
+            }
+
+            if (!newEvents.length && !newWeight) throw new Error('No valid entries');
+            
+            if (newEvents.length > 0) setEvents(newEvents);
+            if (newWeight !== undefined) setWeight(newWeight);
+
             alert(t('drawer.import_success'));
             return true;
         } catch (err) {
@@ -1393,7 +1508,12 @@ const AppContent = () => {
             alert(t('drawer.empty_export'));
             return;
         }
-        const data = JSON.stringify(events, null, 2);
+        const exportData = {
+            meta: { version: 1, exportedAt: new Date().toISOString() },
+            weight: weight,
+            events: events
+        };
+        const data = JSON.stringify(exportData, null, 2);
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const timestamp = new Date().toISOString().split('T')[0];
@@ -1429,12 +1549,6 @@ const AppContent = () => {
                                     aria-label={t('drawer.title')}
                                 >
                                     <Menu size={20} />
-                                </button>
-                                <button 
-                                    onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-                                    className="p-2 bg-gray-50 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition"
-                                >
-                                    <Languages size={20} />
                                 </button>
                             </div>
                         </div>
@@ -1556,6 +1670,7 @@ const AppContent = () => {
                 isOpen={isQrModalOpen}
                 onClose={() => setIsQrModalOpen(false)}
                 events={events}
+                weight={weight}
                 onImportJson={(payload) => importEventsFromJson(payload)}
             />
 
@@ -1624,6 +1739,21 @@ const AppContent = () => {
                         <div className="text-left">
                             <p className="font-bold text-gray-900 text-sm">{t('drawer.qr')}</p>
                             <p className="text-xs text-gray-500">{t('drawer.qr_hint')}</p>
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            if (lang === 'zh') setLang('en');
+                            else if (lang === 'en') setLang('ru');
+                            else setLang('zh');
+                        }}
+                        className="w-full flex items-center gap-3 p-4 rounded-2xl border border-gray-200 hover:border-blue-200 hover:bg-blue-50 transition"
+                    >
+                        <Languages className="text-blue-500" size={20} />
+                        <div className="text-left">
+                            <p className="font-bold text-gray-900 text-sm">{t('drawer.lang')} ({lang.toUpperCase()})</p>
+                            <p className="text-xs text-gray-500">{t('drawer.lang_hint')}</p>
                         </div>
                     </button>
 
