@@ -316,7 +316,7 @@ const useTranslation = () => {
 };
 
 const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
-    const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('hrt-lang') as Lang) || 'en');
+    const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('hrt-lang') as Lang) || 'zh');
 
     useEffect(() => {
         localStorage.setItem('hrt-lang', lang);
