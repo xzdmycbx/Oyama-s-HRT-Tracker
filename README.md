@@ -113,6 +113,9 @@ I wish you a smooth transition and Happy Estimating! 🏳️‍⚧️<br>
 同时，祝所有用此 webapp 的停经期女性身体健康 ❤️
 <br>
 At the same time, I wish good health to all the women using this web app who are going through menopause. ❤️
+# TODO
+-   [ ] Add Japanese language localization support
+-   [ ] Add testosterone calculation support
 
 # LICENCE
 本项目遵守 MIT Licence
