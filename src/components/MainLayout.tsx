@@ -5,6 +5,7 @@ import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from '../contexts/DialogContext';
 import { useAuth } from '../contexts/AuthContext';
 import apiClient from '../api/client';
+import { API_ORIGIN } from '../api/config';
 import { useAppData } from '../contexts/AppDataContext';
 import { formatDate, formatTime } from '../utils/helpers';
 import { DoseEvent, LabResult } from '../../logic';
@@ -76,8 +77,7 @@ const MainLayout: React.FC = () => {
     // Fetch user avatar when authenticated
     useEffect(() => {
         if (isAuthenticated && user?.username) {
-            const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-            const avatarPath = `${baseUrl}/api/avatars/${user.username}`;
+            const avatarPath = `${API_ORIGIN}/api/avatars/${user.username}`;
 
             // Set avatar URL (browser caching handles the actual caching)
             setAvatarUrl(avatarPath);
