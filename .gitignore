@@ -24,3 +24,9 @@ src-tauri/target/release
 *.njsproj
 *.sln
 *.sw?
+
+#environment
+
+.env
+.env.*
+!.env.example
