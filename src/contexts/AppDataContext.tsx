@@ -36,14 +36,55 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     const [currentTime, setCurrentTime] = useState(new Date());
 
     // Persist to localStorage
-    useEffect(() => { localStorage.setItem('hrt-events', JSON.stringify(events)); }, [events]);
-    useEffect(() => { localStorage.setItem('hrt-weight', weight.toString()); }, [weight]);
-    useEffect(() => { localStorage.setItem('hrt-lab-results', JSON.stringify(labResults)); }, [labResults]);
+    useEffect(() => {
+        const value = JSON.stringify(events);
+        localStorage.setItem('hrt-events', value);
+        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-events' } }));
+    }, [events]);
+    useEffect(() => {
+        const value = weight.toString();
+        localStorage.setItem('hrt-weight', value);
+        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-weight' } }));
+    }, [weight]);
+    useEffect(() => {
+        const value = JSON.stringify(labResults);
+        localStorage.setItem('hrt-lab-results', value);
+        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-lab-results' } }));
+    }, [labResults]);
 
     // Update current time every minute
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 60000);
         return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        const handleStorageChange = (e: StorageEvent) => {
+            const syncKeys = ['hrt-events', 'hrt-weight', 'hrt-lab-results'];
+            const isCloudSync = e.key === 'hrt-data-synced';
+            const isOtherTabSync = e.storageArea === localStorage && e.key && syncKeys.includes(e.key);
+            if (!isCloudSync && !isOtherTabSync) {
+                return;
+            }
+
+            if (e.key === 'hrt-events' || isCloudSync) {
+                const saved = localStorage.getItem('hrt-events');
+                setEvents(saved ? JSON.parse(saved) : []);
+            }
+
+            if (e.key === 'hrt-weight' || isCloudSync) {
+                const saved = localStorage.getItem('hrt-weight');
+                setWeight(saved ? parseFloat(saved) : 70.0);
+            }
+
+            if (e.key === 'hrt-lab-results' || isCloudSync) {
+                const saved = localStorage.getItem('hrt-lab-results');
+                setLabResults(saved ? JSON.parse(saved) : []);
+            }
+        };
+
+        window.addEventListener('storage', handleStorageChange);
+        return () => window.removeEventListener('storage', handleStorageChange);
     }, []);
 
     // Run simulation when events or weight change

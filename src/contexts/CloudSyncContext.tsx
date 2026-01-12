@@ -12,7 +12,9 @@ interface CloudSyncContextType {
 const CloudSyncContext = createContext<CloudSyncContextType | undefined>(undefined);
 
 const LAST_SYNC_TIME_KEY = 'hrt-last-sync-time';
+const LAST_PULL_TIME_KEY = 'hrt-last-pull-time';
 const SYNC_INTERVAL = 15000; // 15 seconds
+const PULL_CHECK_INTERVAL = 10000; // 10 seconds
 
 export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -24,6 +26,15 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingRef = useRef(false);
+
+  const shouldPullFromCloud = useCallback(() => {
+    const lastPull = localStorage.getItem(LAST_PULL_TIME_KEY);
+    if (!lastPull) {
+      return true;
+    }
+    const lastPullTime = new Date(lastPull).getTime();
+    return Date.now() - lastPullTime >= SYNC_INTERVAL;
+  }, []);
 
   // Load last sync time from localStorage
   useEffect(() => {
@@ -146,6 +157,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       if (response.success && response.data) {
         const cloudData = response.data.data;
+        const now = new Date();
 
         if (cloudData && cloudData.lastModified) {
           const lastLocalModified = localStorage.getItem('hrt-last-modified');
@@ -173,6 +185,10 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             }));
           }
         }
+
+        setLastSyncTime(now);
+        localStorage.setItem(LAST_SYNC_TIME_KEY, now.toISOString());
+        localStorage.setItem(LAST_PULL_TIME_KEY, now.toISOString());
       }
     } catch (error) {
       console.error('Poll sync error:', error);
@@ -252,22 +268,35 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     if (!isAuthenticated) return;
 
+    const triggerSync = () => {
+      // Debounce sync
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      syncTimeoutRef.current = setTimeout(() => {
+        syncToCloud();
+      }, 1000); // 1 second debounce
+    };
+
     const handleStorageChange = (e: StorageEvent) => {
+      if (e.storageArea !== localStorage) {
+        return;
+      }
       const syncKeys = ['hrt-events', 'hrt-weight', 'hrt-lab-results', 'hrt-lang'];
       if (e.key && syncKeys.includes(e.key)) {
-        // Debounce sync
-        if (syncTimeoutRef.current) {
-          clearTimeout(syncTimeoutRef.current);
-        }
-        syncTimeoutRef.current = setTimeout(() => {
-          syncToCloud();
-        }, 1000); // 1 second debounce
+        triggerSync();
       }
     };
 
+    const handleLocalUpdate = () => {
+      triggerSync();
+    };
+
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('hrt-local-data-updated', handleLocalUpdate as EventListener);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('hrt-local-data-updated', handleLocalUpdate as EventListener);
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
@@ -280,12 +309,16 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    // Initial smart sync when user logs in
-    initialSmartSync();
+    if (shouldPullFromCloud()) {
+      // Initial smart sync when user logs in (only if we should pull)
+      initialSmartSync();
+    }
 
     pollIntervalRef.current = setInterval(() => {
-      syncFromCloud();
-    }, SYNC_INTERVAL);
+      if (shouldPullFromCloud()) {
+        syncFromCloud();
+      }
+    }, PULL_CHECK_INTERVAL);
 
     return () => {
       if (pollIntervalRef.current) {
@@ -295,7 +328,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // CRITICAL FIX: Include sync functions in dependencies to pick up new password state
     // This will restart the interval when password state changes (e.g., after verification)
     // When passwordVerificationFailed changes or password is entered, interval restarts with new closures
-  }, [isAuthenticated, initialSmartSync, syncFromCloud]);
+  }, [isAuthenticated, initialSmartSync, shouldPullFromCloud, syncFromCloud]);
 
   return (
     <CloudSyncContext.Provider

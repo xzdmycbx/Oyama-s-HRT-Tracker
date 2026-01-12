@@ -93,17 +93,21 @@ export const SecurityPasswordProvider: React.FC<{ children: React.ReactNode }> =
               setSecurityPassword(savedPassword);
               setPasswordVerificationFailed(false);
             } else {
-              // Cookie password is invalid, clear it and mark as failed
-              console.warn('Auto-verification failed - cookie password is invalid');
+              if (verifyResponse.status === 401) {
+                // Cookie password is invalid, clear it and mark as failed
+                console.warn('Auto-verification failed - cookie password is invalid');
 
-              // CRITICAL FIX: Await cookie cleanup to ensure it completes
-              try {
-                await clearSecurityPassword();
-              } catch (error) {
-                console.error('Failed to clear security password cookie:', error);
+                // CRITICAL FIX: Await cookie cleanup to ensure it completes
+                try {
+                  await clearSecurityPassword();
+                } catch (error) {
+                  console.error('Failed to clear security password cookie:', error);
+                }
+
+                setPasswordVerificationFailed(true); // Prevent infinite retries!
+              } else {
+                console.warn('Auto-verification failed due to non-auth error, will retry later');
               }
-
-              setPasswordVerificationFailed(true); // Prevent infinite retries!
             }
           }
 
@@ -144,13 +148,15 @@ export const SecurityPasswordProvider: React.FC<{ children: React.ReactNode }> =
 
         return { success: true };
       } else {
-        // Password is wrong - DO NOT retry automatically
-        setPasswordVerificationFailed(true);
-        return { success: false, error: response.error || 'Invalid password' };
+        if (response.status === 401) {
+          // Password is wrong - DO NOT retry automatically
+          setPasswordVerificationFailed(true);
+          return { success: false, error: response.error || 'Invalid password' };
+        }
+        return { success: false, error: response.error || 'Verification failed' };
       }
     } catch (error) {
       console.error('Verification error:', error);
-      setPasswordVerificationFailed(true);
       return { success: false, error: error instanceof Error ? error.message : 'Verification failed' };
     }
   }, [user]);

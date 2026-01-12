@@ -67,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('hrt-lang');
       localStorage.removeItem('hrt-last-modified');
       localStorage.removeItem('hrt-last-sync-time');
+      localStorage.removeItem('hrt-last-pull-time');
     }
   }, []);
 
