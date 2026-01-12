@@ -94,19 +94,20 @@ class ApiClient {
         // CRITICAL FIX: Don't auto-retry 401 if this is a security password verification
         // Only /user/data (GET/POST) and /user/data (PUT) with password param can return 401 for wrong password
         // Other 401s are token expiry and should trigger refresh
+        const bodyHasPassword =
+          typeof options.body === 'string' && /"password"|"_password"/.test(options.body);
+
         const isSecurityPasswordRequest =
-          (endpoint === '/user/data' || endpoint.startsWith('/user/data?')) &&
-          options.body &&
-          typeof options.body === 'string' &&
-          options.body.includes('"password"');
+          (endpoint === '/user/data' || endpoint.startsWith('/user/data?')) && bodyHasPassword;
 
         // Handle 401 Unauthorized - try to refresh token
-        // BUT: if this is a security password verification, DON'T refresh
+        // BUT: if this is a password-related request, DON'T refresh
         if (response.status === 401 &&
             this.refreshTokenCallback &&
             !this.isRefreshing &&
             !publicEndpoints.some(ep => endpoint.startsWith(ep)) &&
-            !isSecurityPasswordRequest) { // Skip auto-retry for password verification
+            !isSecurityPasswordRequest &&
+            !bodyHasPassword) { // Skip auto-retry for password verification
           this.isRefreshing = true;
           const refreshed = await this.refreshTokenCallback();
           this.isRefreshing = false;

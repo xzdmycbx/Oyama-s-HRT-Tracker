@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import apiClient from '../api/client';
 import type { AuthTokens } from '../api/types';
 import { clearSecurityPassword } from '../utils/crypto';
+import { deleteCookie, getCookie, setCookie } from '../utils/cookies';
 
 interface User {
   username: string;
@@ -23,6 +24,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_STORAGE_KEY = 'hrt-access-token';
 const REFRESH_TOKEN_STORAGE_KEY = 'hrt-refresh-token';
 const USERNAME_STORAGE_KEY = 'hrt-username';
+const TOKEN_COOKIE_DAYS = 7;
+
+const getStoredValue = (key: string) => getCookie(key) || localStorage.getItem(key);
+const setStoredValue = (key: string, value: string) => {
+  localStorage.setItem(key, value);
+  setCookie(key, value, TOKEN_COOKIE_DAYS);
+};
+const clearStoredValue = (key: string) => {
+  localStorage.removeItem(key);
+  deleteCookie(key);
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -36,9 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     apiClient.setAccessToken(null);
 
     // Always clear auth tokens
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-    localStorage.removeItem(USERNAME_STORAGE_KEY);
+    clearStoredValue(TOKEN_STORAGE_KEY);
+    clearStoredValue(REFRESH_TOKEN_STORAGE_KEY);
+    clearStoredValue(USERNAME_STORAGE_KEY);
 
     // Always clear security password cookie
     try {
@@ -66,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     refreshPromiseRef.current = (async () => {
       try {
-        const refreshToken = localStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+        const refreshToken = getStoredValue(REFRESH_TOKEN_STORAGE_KEY);
         if (!refreshToken) return false;
 
         const response = await apiClient.refreshToken({ refresh_token: refreshToken });
@@ -75,8 +87,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const { access_token, refresh_token } = response.data;
           setAccessToken(access_token);
           apiClient.setAccessToken(access_token);
-          localStorage.setItem(TOKEN_STORAGE_KEY, access_token);
-          localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refresh_token);
+          setStoredValue(TOKEN_STORAGE_KEY, access_token);
+          setStoredValue(REFRESH_TOKEN_STORAGE_KEY, refresh_token);
           return true;
         }
 
@@ -93,8 +105,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Initialize auth state from localStorage
   useEffect(() => {
-    const storedAccessToken = localStorage.getItem(TOKEN_STORAGE_KEY);
-    const storedUsername = localStorage.getItem(USERNAME_STORAGE_KEY);
+    const storedAccessToken = getStoredValue(TOKEN_STORAGE_KEY);
+    const storedUsername = getStoredValue(USERNAME_STORAGE_KEY);
 
     if (storedAccessToken && storedUsername) {
       setAccessToken(storedAccessToken);
@@ -134,9 +146,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({ username });
       apiClient.setAccessToken(access_token);
 
-      localStorage.setItem(TOKEN_STORAGE_KEY, access_token);
-      localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refresh_token);
-      localStorage.setItem(USERNAME_STORAGE_KEY, username);
+      setStoredValue(TOKEN_STORAGE_KEY, access_token);
+      setStoredValue(REFRESH_TOKEN_STORAGE_KEY, refresh_token);
+      setStoredValue(USERNAME_STORAGE_KEY, username);
 
       return { success: true };
     }
@@ -154,9 +166,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({ username });
       apiClient.setAccessToken(access_token);
 
-      localStorage.setItem(TOKEN_STORAGE_KEY, access_token);
-      localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refresh_token);
-      localStorage.setItem(USERNAME_STORAGE_KEY, username);
+      setStoredValue(TOKEN_STORAGE_KEY, access_token);
+      setStoredValue(REFRESH_TOKEN_STORAGE_KEY, refresh_token);
+      setStoredValue(USERNAME_STORAGE_KEY, username);
 
       return { success: true };
     }
