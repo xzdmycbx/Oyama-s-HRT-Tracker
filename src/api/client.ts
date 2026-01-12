@@ -52,7 +52,8 @@ class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    timeout: number = 30000
+    timeout: number = 30000,
+    hasRetried: boolean = false
   ): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: HeadersInit = {
@@ -91,29 +92,19 @@ class ApiClient {
       }
 
       if (!response.ok) {
-        // CRITICAL FIX: Don't auto-retry 401 if this is a security password verification
-        // Only /user/data (GET/POST) and /user/data (PUT) with password param can return 401 for wrong password
-        // Other 401s are token expiry and should trigger refresh
-        const isSecurityPasswordRequest =
-          (endpoint === '/user/data' || endpoint.startsWith('/user/data?')) &&
-          options.body &&
-          typeof options.body === 'string' &&
-          options.body.includes('"password"');
-
-        // Handle 401 Unauthorized - try to refresh token
-        // BUT: if this is a security password verification, DON'T refresh
+        // Handle 401 Unauthorized - try to refresh token once
         if (response.status === 401 &&
             this.refreshTokenCallback &&
             !this.isRefreshing &&
             !publicEndpoints.some(ep => endpoint.startsWith(ep)) &&
-            !isSecurityPasswordRequest) { // Skip auto-retry for password verification
+            !hasRetried) {
           this.isRefreshing = true;
           const refreshed = await this.refreshTokenCallback();
           this.isRefreshing = false;
 
           if (refreshed) {
             // Retry the request with new token
-            return this.request<T>(endpoint, options, timeout);
+            return this.request<T>(endpoint, options, timeout, true);
           }
         }
 

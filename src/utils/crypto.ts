@@ -1,7 +1,10 @@
 // 安全密码加密/解密工具
 // 使用 AES-GCM 对称加密
 
+import { deleteCookie, getCookie, setCookie } from './cookies';
+
 const SECURITY_PASSWORD_COOKIE = 'hrt-security-pwd';
+const SECURITY_PASSWORD_STORAGE_KEY = 'hrt-security-pwd';
 const SALT = 'hrt-tracker-security-salt-v1'; // 固定salt
 
 /**
@@ -92,99 +95,6 @@ async function decryptPassword(encryptedData: string, username: string): Promise
 }
 
 /**
- * 设置 Cookie
- */
-function setCookie(name: string, value: string, days: number): boolean {
-  try {
-    const expires = new Date();
-    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-
-    // Encode value to handle special characters
-    const encodedValue = encodeURIComponent(value);
-
-    // Check if running on HTTPS
-    const isSecure = window.location.protocol === 'https:';
-
-    // Build cookie string with all necessary attributes
-    let cookieString = `${name}=${encodedValue}`;
-    cookieString += `;expires=${expires.toUTCString()}`;
-    cookieString += `;path=/`;
-    cookieString += `;SameSite=Strict`;
-
-    // Add Secure flag for HTTPS
-    if (isSecure) {
-      cookieString += `;Secure`;
-    }
-
-    document.cookie = cookieString;
-
-    // Verify cookie was set by reading it back
-    const cookieSet = getCookie(name) === value;
-    if (!cookieSet) {
-      console.error(`Failed to set cookie: ${name}`);
-    }
-    return cookieSet;
-  } catch (error) {
-    console.error('Error setting cookie:', error);
-    return false;
-  }
-}
-
-/**
- * 获取 Cookie
- */
-function getCookie(name: string): string | null {
-  try {
-    const nameEQ = name + '=';
-    const ca = document.cookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i];
-      while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-      if (c.indexOf(nameEQ) === 0) {
-        const value = c.substring(nameEQ.length, c.length);
-        // Decode value
-        return decodeURIComponent(value);
-      }
-    }
-    return null;
-  } catch (error) {
-    console.error('Error getting cookie:', error);
-    return null;
-  }
-}
-
-/**
- * 删除 Cookie
- */
-function deleteCookie(name: string): boolean {
-  try {
-    const isSecure = window.location.protocol === 'https:';
-
-    // Set cookie with past expiration date and same attributes
-    let cookieString = `${name}=`;
-    cookieString += `;expires=Thu, 01 Jan 1970 00:00:00 UTC`;
-    cookieString += `;path=/`;
-    cookieString += `;SameSite=Strict`;
-
-    if (isSecure) {
-      cookieString += `;Secure`;
-    }
-
-    document.cookie = cookieString;
-
-    // Verify cookie was deleted
-    const cookieDeleted = getCookie(name) === null;
-    if (!cookieDeleted) {
-      console.error(`Failed to delete cookie: ${name}`);
-    }
-    return cookieDeleted;
-  } catch (error) {
-    console.error('Error deleting cookie:', error);
-    return false;
-  }
-}
-
-/**
  * 保存安全密码到 Cookie（加密，7天过期）
  * @returns true if saved successfully, false otherwise
  */
@@ -192,6 +102,7 @@ export async function saveSecurityPassword(password: string, username: string): 
   try {
     const encrypted = await encryptPassword(password, username);
     const saved = setCookie(SECURITY_PASSWORD_COOKIE, encrypted, 7); // 7天过期，与 refresh token 一致
+    localStorage.setItem(SECURITY_PASSWORD_STORAGE_KEY, encrypted);
 
     if (saved) {
       console.log('Security password saved to cookie successfully');
@@ -211,7 +122,8 @@ export async function saveSecurityPassword(password: string, username: string): 
  */
 export async function getSecurityPassword(username: string): Promise<string | null> {
   try {
-    const encrypted = getCookie(SECURITY_PASSWORD_COOKIE);
+    const encrypted = getCookie(SECURITY_PASSWORD_COOKIE) ||
+      localStorage.getItem(SECURITY_PASSWORD_STORAGE_KEY);
     if (!encrypted) return null;
 
     return await decryptPassword(encrypted, username);
@@ -226,5 +138,6 @@ export async function getSecurityPassword(username: string): Promise<string | nu
  * @returns true if deleted successfully, false otherwise
  */
 export async function clearSecurityPassword(): Promise<boolean> {
+  localStorage.removeItem(SECURITY_PASSWORD_STORAGE_KEY);
   return deleteCookie(SECURITY_PASSWORD_COOKIE);
 }
