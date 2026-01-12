@@ -24,7 +24,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_STORAGE_KEY = 'hrt-access-token';
 const REFRESH_TOKEN_STORAGE_KEY = 'hrt-refresh-token';
 const USERNAME_STORAGE_KEY = 'hrt-username';
-const TOKEN_COOKIE_DAYS = 7;
+const TOKEN_COOKIE_DAYS = 3650;
 
 const getStoredValue = (key: string) => getCookie(key) || localStorage.getItem(key);
 const setStoredValue = (key: string, value: string) => {
@@ -43,6 +43,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshPromiseRef = React.useRef<Promise<boolean> | null>(null);
 
   const logout = useCallback(async (clearLocalData: boolean = false) => {
+    try {
+      await apiClient.logout();
+    } catch (error) {
+      console.error('Failed to logout from server:', error);
+    }
+
     setAccessToken(null);
     setUser(null);
     apiClient.setAccessToken(null);

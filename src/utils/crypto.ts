@@ -6,6 +6,7 @@ import { deleteCookie, getCookie, setCookie } from './cookies';
 const SECURITY_PASSWORD_COOKIE = 'hrt-security-pwd';
 const SECURITY_PASSWORD_STORAGE_KEY = 'hrt-security-pwd';
 const SALT = 'hrt-tracker-security-salt-v1'; // 固定salt
+const SECURITY_PASSWORD_COOKIE_DAYS = 3650;
 
 /**
  * 从用户名派生加密密钥
@@ -95,13 +96,13 @@ async function decryptPassword(encryptedData: string, username: string): Promise
 }
 
 /**
- * 保存安全密码到 Cookie（加密，7天过期）
+ * 保存安全密码到 Cookie（加密，长期有效）
  * @returns true if saved successfully, false otherwise
  */
 export async function saveSecurityPassword(password: string, username: string): Promise<boolean> {
   try {
     const encrypted = await encryptPassword(password, username);
-    const saved = setCookie(SECURITY_PASSWORD_COOKIE, encrypted, 7); // 7天过期，与 refresh token 一致
+    const saved = setCookie(SECURITY_PASSWORD_COOKIE, encrypted, SECURITY_PASSWORD_COOKIE_DAYS);
     localStorage.setItem(SECURITY_PASSWORD_STORAGE_KEY, encrypted);
 
     if (saved) {

@@ -13,8 +13,8 @@ const CloudSyncContext = createContext<CloudSyncContextType | undefined>(undefin
 
 const LAST_SYNC_TIME_KEY = 'hrt-last-sync-time';
 const LAST_PULL_TIME_KEY = 'hrt-last-pull-time';
-const SYNC_INTERVAL = 15000; // 15 seconds
-const PULL_CHECK_INTERVAL = 10000; // 10 seconds
+const SYNC_INTERVAL = 3000; // 3 seconds
+const PULL_CHECK_INTERVAL = 3000; // 3 seconds
 
 export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
@@ -87,12 +87,15 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const labResults = localStorage.getItem('hrt-lab-results');
       const lang = localStorage.getItem('hrt-lang');
 
+      const storedLastModified = localStorage.getItem('hrt-last-modified');
+      const lastModified = storedLastModified || new Date().toISOString();
+
       const localData = {
         events: events ? JSON.parse(events) : [],
         weight: weight ? parseFloat(weight) : 60,
         labResults: labResults ? JSON.parse(labResults) : [],
         lang: lang || 'en',
-        lastModified: new Date().toISOString(),
+        lastModified,
       };
 
       // Use security password for encryption (or undefined if user doesn't have one)
@@ -305,7 +308,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     // This will restart the listener when password state changes
   }, [isAuthenticated, syncToCloud]);
 
-  // Poll cloud every 15 seconds
+  // Poll cloud every 3 seconds
   useEffect(() => {
     if (!isAuthenticated) return;
 

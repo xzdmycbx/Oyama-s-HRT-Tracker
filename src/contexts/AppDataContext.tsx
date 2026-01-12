@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { DoseEvent, LabResult, SimulationResult, runSimulation, createCalibrationInterpolator } from '../../logic';
 
@@ -35,21 +35,50 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     const [simulation, setSimulation] = useState<SimulationResult | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date());
 
+    const suppressLocalUpdateRef = useRef({
+        events: false,
+        weight: false,
+        labResults: false,
+    });
+    const isInitialLoadRef = useRef({
+        events: true,
+        weight: true,
+        labResults: true,
+    });
+
+    const markExternalUpdate = (key: keyof typeof suppressLocalUpdateRef.current) => {
+        suppressLocalUpdateRef.current[key] = true;
+    };
+
+    const finalizeLocalUpdate = (key: keyof typeof suppressLocalUpdateRef.current, updateKey: string) => {
+        if (suppressLocalUpdateRef.current[key]) {
+            suppressLocalUpdateRef.current[key] = false;
+            return;
+        }
+        if (isInitialLoadRef.current[key]) {
+            isInitialLoadRef.current[key] = false;
+            return;
+        }
+        const lastModified = new Date().toISOString();
+        localStorage.setItem('hrt-last-modified', lastModified);
+        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: updateKey, lastModified } }));
+    };
+
     // Persist to localStorage
     useEffect(() => {
         const value = JSON.stringify(events);
         localStorage.setItem('hrt-events', value);
-        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-events' } }));
+        finalizeLocalUpdate('events', 'hrt-events');
     }, [events]);
     useEffect(() => {
         const value = weight.toString();
         localStorage.setItem('hrt-weight', value);
-        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-weight' } }));
+        finalizeLocalUpdate('weight', 'hrt-weight');
     }, [weight]);
     useEffect(() => {
         const value = JSON.stringify(labResults);
         localStorage.setItem('hrt-lab-results', value);
-        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-lab-results' } }));
+        finalizeLocalUpdate('labResults', 'hrt-lab-results');
     }, [labResults]);
 
     // Update current time every minute
@@ -68,16 +97,25 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             }
 
             if (e.key === 'hrt-events' || isCloudSync) {
+                if (isCloudSync || isOtherTabSync) {
+                    markExternalUpdate('events');
+                }
                 const saved = localStorage.getItem('hrt-events');
                 setEvents(saved ? JSON.parse(saved) : []);
             }
 
             if (e.key === 'hrt-weight' || isCloudSync) {
+                if (isCloudSync || isOtherTabSync) {
+                    markExternalUpdate('weight');
+                }
                 const saved = localStorage.getItem('hrt-weight');
                 setWeight(saved ? parseFloat(saved) : 70.0);
             }
 
             if (e.key === 'hrt-lab-results' || isCloudSync) {
+                if (isCloudSync || isOtherTabSync) {
+                    markExternalUpdate('labResults');
+                }
                 const saved = localStorage.getItem('hrt-lab-results');
                 setLabResults(saved ? JSON.parse(saved) : []);
             }
