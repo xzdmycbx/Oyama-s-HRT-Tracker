@@ -370,6 +370,7 @@ export const TRANSLATIONS_BASE = {
 
         // Common
         "common.loading": "加载中...",
+        "common.success": "成功",
         "common.cancel": "取消",
         "common.close": "关闭",
         "common.confirm": "确认",
@@ -804,6 +805,7 @@ export const TRANSLATIONS_BASE = {
 
         // Common
         "common.loading": "Loading...",
+        "common.success": "Success",
         "common.cancel": "Cancel",
         "common.close": "Close",
         "common.confirm": "Confirm",

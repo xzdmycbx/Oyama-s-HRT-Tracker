@@ -13,6 +13,22 @@ const SecurityPasswordGate: React.FC = () => {
   const [isSuccess, setIsSuccess] = useState(false);
   const verifyingRef = useRef(false); // Prevent concurrent verifications
 
+  useEffect(() => {
+    if (!isVerified) {
+      setIsSuccess(false);
+    }
+  }, [isVerified]);
+
+  useEffect(() => {
+    if (hasSecurityPassword === null || hasSecurityPassword === false) {
+      setPassword('');
+      setError('');
+      setIsVerifying(false);
+      setIsSuccess(false);
+      verifyingRef.current = false;
+    }
+  }, [hasSecurityPassword]);
+
   // Handle verify with deduplication
   const handleVerify = useCallback(async (pwd: string) => {
     // Prevent concurrent verifications
@@ -25,6 +41,7 @@ const SecurityPasswordGate: React.FC = () => {
     }
 
     setError('');
+    setIsSuccess(false);
     setIsVerifying(true);
     verifyingRef.current = true;
 
