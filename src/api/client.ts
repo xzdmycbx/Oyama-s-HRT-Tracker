@@ -4,6 +4,7 @@ import type {
   LoginRequest,
   RegisterRequest,
   RefreshTokenRequest,
+  LogoutResponse,
   SessionsResponse,
   RevokeSessionRequest,
   SetSecurityPasswordRequest,
@@ -156,6 +157,12 @@ class ApiClient {
     return this.request<AuthTokens>('/auth/refresh', {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  }
+
+  async logout(): Promise<ApiResponse<LogoutResponse>> {
+    return this.request<LogoutResponse>('/auth/logout', {
+      method: 'POST',
     });
   }
 

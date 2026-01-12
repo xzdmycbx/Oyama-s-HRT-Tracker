@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { TRANSLATIONS, Lang } from '../i18n/translations';
 
 const LanguageContext = createContext<{ lang: Lang; setLang: (l: Lang) => void; t: (k: string) => string } | null>(null);
@@ -11,10 +11,18 @@ export const useTranslation = () => {
 
 export const LanguageProvider = ({ children }: { children: React.ReactNode }) => {
     const [lang, setLang] = useState<Lang>(() => (localStorage.getItem('hrt-lang') as Lang) || 'zh');
+    const isInitialLangRef = useRef(true);
 
     useEffect(() => {
         localStorage.setItem('hrt-lang', lang);
         document.title = (lang.startsWith('zh') || lang === 'yue') ? "HRT 记录" : "HRT Tracker";
+        if (isInitialLangRef.current) {
+            isInitialLangRef.current = false;
+            return;
+        }
+        const lastModified = new Date().toISOString();
+        localStorage.setItem('hrt-last-modified', lastModified);
+        window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-lang', lastModified } }));
     }, [lang]);
 
     const t = (key: string) => {

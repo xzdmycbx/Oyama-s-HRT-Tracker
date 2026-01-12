@@ -28,6 +28,10 @@ export interface RefreshTokenRequest {
   refresh_token: string;
 }
 
+export interface LogoutResponse {
+  revoked_count: number;
+}
+
 // Session Types
 export interface Session {
   session_id: string;
