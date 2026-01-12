@@ -99,8 +99,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return true;
         }
 
-        // If refresh fails, logout
-        logout();
+        if (response.status === 401) {
+          // Refresh token is invalid/expired - logout
+          logout();
+        } else {
+          console.warn('Refresh token failed, keeping session for retry:', response.error);
+        }
         return false;
       } finally {
         refreshPromiseRef.current = null;

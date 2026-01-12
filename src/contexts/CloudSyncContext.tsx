@@ -27,6 +27,47 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingRef = useRef(false);
 
+  const getLocalDataSnapshot = useCallback(() => {
+    const events = localStorage.getItem('hrt-events');
+    const weight = localStorage.getItem('hrt-weight');
+    const labResults = localStorage.getItem('hrt-lab-results');
+    const lang = localStorage.getItem('hrt-lang');
+
+    const storedLastModified = localStorage.getItem('hrt-last-modified');
+
+    return {
+      events: events ? JSON.parse(events) : [],
+      weight: weight ? parseFloat(weight) : 60,
+      labResults: labResults ? JSON.parse(labResults) : [],
+      lang: lang || 'en',
+      lastModified: storedLastModified,
+    };
+  }, []);
+
+  const pushLocalDataToCloud = useCallback(async (localData: {
+    events: any[];
+    weight: number;
+    labResults: any[];
+    lang: string;
+    lastModified: string;
+  }) => {
+    const response = await apiClient.updateUserData({
+      data: localData,
+      password: hasSecurityPassword ? securityPassword : undefined,
+    });
+
+    if (response.success) {
+      const now = new Date();
+      setLastSyncTime(now);
+      localStorage.setItem(LAST_SYNC_TIME_KEY, now.toISOString());
+      localStorage.setItem('hrt-last-modified', localData.lastModified);
+      return true;
+    }
+
+    setSyncError(response.error || 'Failed to sync to cloud');
+    return false;
+  }, [hasSecurityPassword, securityPassword]);
+
   const shouldPullFromCloud = useCallback(() => {
     const lastPull = localStorage.getItem(LAST_PULL_TIME_KEY);
     if (!lastPull) {
@@ -82,44 +123,24 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setSyncError(null);
 
     try {
-      const events = localStorage.getItem('hrt-events');
-      const weight = localStorage.getItem('hrt-weight');
-      const labResults = localStorage.getItem('hrt-lab-results');
-      const lang = localStorage.getItem('hrt-lang');
-
-      const storedLastModified = localStorage.getItem('hrt-last-modified');
-      const lastModified = storedLastModified || new Date().toISOString();
-
-      const localData = {
-        events: events ? JSON.parse(events) : [],
-        weight: weight ? parseFloat(weight) : 60,
-        labResults: labResults ? JSON.parse(labResults) : [],
-        lang: lang || 'en',
-        lastModified,
-      };
-
-      // Use security password for encryption (or undefined if user doesn't have one)
-      const response = await apiClient.updateUserData({
-        data: localData,
-        password: hasSecurityPassword ? securityPassword : undefined,
-      });
-
-      if (response.success) {
-        const now = new Date();
-        setLastSyncTime(now);
-        localStorage.setItem(LAST_SYNC_TIME_KEY, now.toISOString());
-        // Update local lastModified to match what was sent to cloud
-        localStorage.setItem('hrt-last-modified', localData.lastModified);
-      } else {
-        setSyncError(response.error || 'Failed to sync to cloud');
-      }
+      const localData = getLocalDataSnapshot();
+      const lastModified = localData.lastModified || new Date().toISOString();
+      await pushLocalDataToCloud({ ...localData, lastModified });
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : 'Failed to sync to cloud');
     } finally {
       isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [isAuthenticated, hasSecurityPassword, isVerified, securityPassword, passwordVerificationFailed]);
+  }, [
+    isAuthenticated,
+    hasSecurityPassword,
+    isVerified,
+    securityPassword,
+    passwordVerificationFailed,
+    getLocalDataSnapshot,
+    pushLocalDataToCloud
+  ]);
 
   // Poll cloud for updates
   const syncFromCloud = useCallback(async () => {
@@ -160,33 +181,61 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       if (response.success && response.data) {
         const cloudData = response.data.data;
+        const localData = getLocalDataSnapshot();
         const now = new Date();
 
-        if (cloudData && cloudData.lastModified) {
-          const lastLocalModified = localStorage.getItem('hrt-last-modified');
-
-          // Only update if cloud data is newer
-          if (!lastLocalModified || new Date(cloudData.lastModified) > new Date(lastLocalModified)) {
-            if (cloudData.events) {
-              localStorage.setItem('hrt-events', JSON.stringify(cloudData.events));
-            }
-            if (cloudData.weight !== undefined) {
-              localStorage.setItem('hrt-weight', cloudData.weight.toString());
-            }
-            if (cloudData.labResults) {
-              localStorage.setItem('hrt-lab-results', JSON.stringify(cloudData.labResults));
-            }
-            if (cloudData.lang) {
-              localStorage.setItem('hrt-lang', cloudData.lang);
-            }
-            localStorage.setItem('hrt-last-modified', cloudData.lastModified);
-
-            // Trigger storage event to notify components
-            window.dispatchEvent(new StorageEvent('storage', {
-              key: 'hrt-data-synced',
-              newValue: Date.now().toString()
-            }));
+        const applyCloudToLocal = (data: typeof cloudData, fallbackTimestamp?: string) => {
+          if (data?.events) {
+            localStorage.setItem('hrt-events', JSON.stringify(data.events));
           }
+          if (data?.weight !== undefined) {
+            localStorage.setItem('hrt-weight', data.weight.toString());
+          }
+          if (data?.labResults) {
+            localStorage.setItem('hrt-lab-results', JSON.stringify(data.labResults));
+          }
+          if (data?.lang) {
+            localStorage.setItem('hrt-lang', data.lang);
+          }
+          if (data?.lastModified || fallbackTimestamp) {
+            localStorage.setItem('hrt-last-modified', data?.lastModified || fallbackTimestamp || '');
+          }
+
+          // Trigger storage event to notify components
+          window.dispatchEvent(new StorageEvent('storage', {
+            key: 'hrt-data-synced',
+            newValue: Date.now().toString()
+          }));
+        };
+
+        if (cloudData) {
+          const cloudLastModified = cloudData.lastModified;
+          const localLastModified = localData.lastModified;
+
+          if (cloudLastModified && localLastModified) {
+            const cloudTime = new Date(cloudLastModified);
+            const localTime = new Date(localLastModified);
+
+            if (localTime > cloudTime) {
+              await pushLocalDataToCloud(localData);
+            } else if (cloudTime > localTime) {
+              applyCloudToLocal(cloudData);
+            }
+          } else if (!cloudLastModified && localLastModified) {
+            await pushLocalDataToCloud({ ...localData, lastModified: localLastModified });
+          } else if (cloudLastModified && !localLastModified) {
+            applyCloudToLocal(cloudData);
+          } else {
+            const fallbackTimestamp = new Date().toISOString();
+            applyCloudToLocal(cloudData, fallbackTimestamp);
+            await pushLocalDataToCloud({
+              ...localData,
+              ...cloudData,
+              lastModified: fallbackTimestamp,
+            });
+          }
+        } else if (localData.lastModified) {
+          await pushLocalDataToCloud({ ...localData, lastModified: localData.lastModified });
         }
 
         setLastSyncTime(now);
@@ -199,7 +248,15 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       isSyncingRef.current = false;
       setIsSyncing(false);
     }
-  }, [isAuthenticated, hasSecurityPassword, isVerified, securityPassword, passwordVerificationFailed]);
+  }, [
+    isAuthenticated,
+    hasSecurityPassword,
+    isVerified,
+    securityPassword,
+    passwordVerificationFailed,
+    getLocalDataSnapshot,
+    pushLocalDataToCloud
+  ]);
 
   // Smart initial sync: compare local and cloud data, sync the newer one
   const initialSmartSync = useCallback(async () => {
