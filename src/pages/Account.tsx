@@ -229,7 +229,7 @@ const Account: React.FC = () => {
               <div className="text-red-600 text-xs mt-2">{syncError}</div>
             )}
             <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              {t('account.autoSyncNote') || 'Data syncs in real time after local changes'}
+              {t('account.autoSyncNote') || 'Local changes upload in real time; cloud data is pulled every 3 seconds'}
             </div>
           </div>
         </div>
