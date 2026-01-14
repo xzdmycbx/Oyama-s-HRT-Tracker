@@ -23,7 +23,6 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSyncingRef = useRef(false);
 
@@ -329,13 +328,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!isAuthenticated) return;
 
     const triggerSync = () => {
-      // Debounce sync
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-      syncTimeoutRef.current = setTimeout(() => {
-        syncToCloud();
-      }, 1000); // 1 second debounce
+      syncToCloud();
     };
 
     const handleStorageChange = (e: StorageEvent) => {
@@ -357,9 +350,6 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('hrt-local-data-updated', handleLocalUpdate as EventListener);
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
     };
     // CRITICAL FIX: Include syncToCloud in dependencies to pick up new password state
     // This will restart the listener when password state changes
