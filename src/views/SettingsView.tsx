@@ -132,15 +132,12 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
       if (newEvents.length > 0) {
         setEvents(newEvents);
-        localStorage.setItem('hrt-events', JSON.stringify(newEvents));
       }
       if (newWeight !== undefined) {
         setWeight(newWeight);
-        localStorage.setItem('hrt-weight', newWeight.toString());
       }
       if (newLabs.length > 0) {
         setLabResults(newLabs);
-        localStorage.setItem('hrt-lab-results', JSON.stringify(newLabs));
       }
 
       showDialog('alert', t('drawer.import_success'));
@@ -152,9 +149,13 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const importEventsFromJson = (text: string): boolean => {
+  const importEventsFromJson = async (text: string): Promise<boolean> => {
     try {
       const parsed = JSON.parse(text);
+      const confirmation = await showDialog('confirm', t('import.overwrite_confirm'));
+      if (confirmation !== 'confirm') {
+        return false;
+      }
 
       if (parsed.encrypted && parsed.iv && parsed.salt && parsed.data) {
         setPendingImportText(text);
@@ -240,7 +241,6 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     if (!events.length) return;
     showDialog('confirm', t('drawer.clear_confirm'), () => {
       setEvents([]);
-      localStorage.setItem('hrt-events', JSON.stringify([]));
     });
   };
 

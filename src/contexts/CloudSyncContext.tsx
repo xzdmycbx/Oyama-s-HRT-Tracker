@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import apiClient from '../api/client';
 import { useAuth } from './AuthContext';
 import { useSecurityPassword } from './SecurityPasswordContext';
+import { computeDataHash } from '../utils/dataHash';
 
 interface CloudSyncContextType {
   isSyncing: boolean;
@@ -33,13 +34,25 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const lang = localStorage.getItem('hrt-lang');
 
     const storedLastModified = localStorage.getItem('hrt-last-modified');
+    const parsedEvents = events ? JSON.parse(events) : [];
+    const parsedWeight = weight ? parseFloat(weight) : 60;
+    const parsedLabResults = labResults ? JSON.parse(labResults) : [];
+    const resolvedLang = lang || 'en';
+    const dataHash = computeDataHash({
+      events: parsedEvents,
+      weight: parsedWeight,
+      labResults: parsedLabResults,
+      lang: resolvedLang,
+    });
+    localStorage.setItem('hrt-data-hash', dataHash);
 
     return {
-      events: events ? JSON.parse(events) : [],
-      weight: weight ? parseFloat(weight) : 60,
-      labResults: labResults ? JSON.parse(labResults) : [],
-      lang: lang || 'en',
+      events: parsedEvents,
+      weight: parsedWeight,
+      labResults: parsedLabResults,
+      lang: resolvedLang,
       lastModified: storedLastModified,
+      dataHash,
     };
   }, []);
 
@@ -57,9 +70,16 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     if (response.success) {
       const now = new Date();
+      const dataHash = computeDataHash({
+        events: localData.events,
+        weight: localData.weight,
+        labResults: localData.labResults,
+        lang: localData.lang,
+      });
       setLastSyncTime(now);
       localStorage.setItem(LAST_SYNC_TIME_KEY, now.toISOString());
       localStorage.setItem('hrt-last-modified', localData.lastModified);
+      localStorage.setItem('hrt-data-hash', dataHash);
       return true;
     }
 
@@ -184,6 +204,7 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const now = new Date();
 
         const applyCloudToLocal = (data: typeof cloudData, fallbackTimestamp?: string) => {
+          const resolvedLang = data?.lang || localData.lang;
           if (data?.events) {
             localStorage.setItem('hrt-events', JSON.stringify(data.events));
           }
@@ -199,6 +220,13 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           if (data?.lastModified || fallbackTimestamp) {
             localStorage.setItem('hrt-last-modified', data?.lastModified || fallbackTimestamp || '');
           }
+          const dataHash = computeDataHash({
+            events: data?.events || [],
+            weight: data?.weight ?? localData.weight,
+            labResults: data?.labResults || [],
+            lang: resolvedLang,
+          });
+          localStorage.setItem('hrt-data-hash', dataHash);
 
           // Trigger storage event to notify components
           window.dispatchEvent(new StorageEvent('storage', {
@@ -210,28 +238,37 @@ export const CloudSyncProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         if (cloudData) {
           const cloudLastModified = cloudData.lastModified;
           const localLastModified = localData.lastModified;
+          const cloudHash = computeDataHash({
+            events: cloudData.events || [],
+            weight: cloudData.weight ?? localData.weight,
+            labResults: cloudData.labResults || [],
+            lang: cloudData.lang || localData.lang,
+          });
+          const localHash = localData.dataHash;
 
-          if (cloudLastModified && localLastModified) {
-            const cloudTime = new Date(cloudLastModified);
-            const localTime = new Date(localLastModified);
+          if (cloudHash !== localHash) {
+            if (cloudLastModified && localLastModified) {
+              const cloudTime = new Date(cloudLastModified);
+              const localTime = new Date(localLastModified);
 
-            if (localTime > cloudTime) {
-              await pushLocalDataToCloud(localData);
-            } else if (cloudTime > localTime) {
+              if (localTime > cloudTime) {
+                await pushLocalDataToCloud(localData);
+              } else {
+                applyCloudToLocal(cloudData);
+              }
+            } else if (!cloudLastModified && localLastModified) {
+              await pushLocalDataToCloud({ ...localData, lastModified: localLastModified });
+            } else if (cloudLastModified && !localLastModified) {
               applyCloudToLocal(cloudData);
+            } else {
+              const fallbackTimestamp = new Date().toISOString();
+              applyCloudToLocal(cloudData, fallbackTimestamp);
+              await pushLocalDataToCloud({
+                ...localData,
+                ...cloudData,
+                lastModified: fallbackTimestamp,
+              });
             }
-          } else if (!cloudLastModified && localLastModified) {
-            await pushLocalDataToCloud({ ...localData, lastModified: localLastModified });
-          } else if (cloudLastModified && !localLastModified) {
-            applyCloudToLocal(cloudData);
-          } else {
-            const fallbackTimestamp = new Date().toISOString();
-            applyCloudToLocal(cloudData, fallbackTimestamp);
-            await pushLocalDataToCloud({
-              ...localData,
-              ...cloudData,
-              lastModified: fallbackTimestamp,
-            });
           }
         } else if (localData.lastModified) {
           await pushLocalDataToCloud({ ...localData, lastModified: localData.lastModified });
