@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCloudSync } from '../contexts/CloudSyncContext';
+import { useSecurityPassword } from '../contexts/SecurityPasswordContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from '../contexts/DialogContext';
 import { User, Smartphone, Share2, Users, LogOut, Settings, Cloud, Camera, Trash2, Key, Lock } from 'lucide-react';
@@ -10,6 +11,7 @@ import apiClient from '../api/client';
 const Account: React.FC = () => {
   const { user, logout } = useAuth();
   const { isSyncing, lastSyncTime, syncError } = useCloudSync();
+  const { hasSecurityPassword } = useSecurityPassword();
   const { t } = useTranslation();
   const { showDialog } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -23,6 +25,10 @@ const Account: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
+  const isShareAccessDisabled = hasSecurityPassword === true;
+  const managementItemClass = 'flex items-center gap-3 px-4 py-4 transition';
+  const managementLinkClass = `${managementItemClass} hover:bg-gray-50`;
+  const managementDisabledClass = `${managementItemClass} opacity-50 cursor-not-allowed`;
 
   const handleLogout = async () => {
     const choice = await showDialog('confirm',
@@ -223,7 +229,7 @@ const Account: React.FC = () => {
               <div className="text-red-600 text-xs mt-2">{syncError}</div>
             )}
             <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-              {t('account.autoSyncNote') || 'Data syncs automatically every 15 seconds'}
+              {t('account.autoSyncNote') || 'Data syncs in real time after local changes'}
             </div>
           </div>
         </div>
@@ -236,7 +242,7 @@ const Account: React.FC = () => {
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
             <Link
               to="/account/devices"
-              className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition"
+              className={managementLinkClass}
             >
               <Smartphone size={20} className="text-gray-600" />
               <div className="flex-1">
@@ -245,31 +251,51 @@ const Account: React.FC = () => {
               </div>
             </Link>
 
-            <Link
-              to="/account/shares"
-              className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition"
-            >
-              <Share2 size={20} className="text-gray-600" />
-              <div className="flex-1">
-                <p className="font-bold text-gray-900 text-sm">{t('account.shares') || 'Shares'}</p>
-                <p className="text-xs text-gray-500">{t('account.sharesDesc') || 'Manage data shares'}</p>
+            {isShareAccessDisabled ? (
+              <div className={managementDisabledClass} aria-disabled="true">
+                <Share2 size={20} className="text-gray-600" />
+                <div className="flex-1">
+                  <p className="font-bold text-gray-900 text-sm">{t('account.shares') || 'Shares'}</p>
+                  <p className="text-xs text-gray-500">{t('account.sharesDesc') || 'Manage data shares'}</p>
+                </div>
               </div>
-            </Link>
+            ) : (
+              <Link
+                to="/account/shares"
+                className={managementLinkClass}
+              >
+                <Share2 size={20} className="text-gray-600" />
+                <div className="flex-1">
+                  <p className="font-bold text-gray-900 text-sm">{t('account.shares') || 'Shares'}</p>
+                  <p className="text-xs text-gray-500">{t('account.sharesDesc') || 'Manage data shares'}</p>
+                </div>
+              </Link>
+            )}
 
-            <Link
-              to="/account/authorizations"
-              className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition"
-            >
-              <Users size={20} className="text-gray-600" />
-              <div className="flex-1">
-                <p className="font-bold text-gray-900 text-sm">{t('account.authorizations') || 'Authorizations'}</p>
-                <p className="text-xs text-gray-500">{t('account.authorizationsDesc') || 'Manage data access'}</p>
+            {isShareAccessDisabled ? (
+              <div className={managementDisabledClass} aria-disabled="true">
+                <Users size={20} className="text-gray-600" />
+                <div className="flex-1">
+                  <p className="font-bold text-gray-900 text-sm">{t('account.authorizations') || 'Authorizations'}</p>
+                  <p className="text-xs text-gray-500">{t('account.authorizationsDesc') || 'Manage data access'}</p>
+                </div>
               </div>
-            </Link>
+            ) : (
+              <Link
+                to="/account/authorizations"
+                className={managementLinkClass}
+              >
+                <Users size={20} className="text-gray-600" />
+                <div className="flex-1">
+                  <p className="font-bold text-gray-900 text-sm">{t('account.authorizations') || 'Authorizations'}</p>
+                  <p className="text-xs text-gray-500">{t('account.authorizationsDesc') || 'Manage data access'}</p>
+                </div>
+              </Link>
+            )}
 
             <Link
               to="/account/security"
-              className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition"
+              className={managementLinkClass}
             >
               <Lock size={20} className="text-gray-600" />
               <div className="flex-1">
@@ -280,7 +306,7 @@ const Account: React.FC = () => {
 
             <Link
               to="/account/settings"
-              className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition"
+              className={managementLinkClass}
             >
               <Settings size={20} className="text-gray-600" />
               <div className="flex-1">
@@ -291,7 +317,7 @@ const Account: React.FC = () => {
 
             <Link
               to="/account/authorized-data"
-              className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition"
+              className={managementLinkClass}
             >
               <Users size={20} className="text-blue-600" />
               <div className="flex-1">
