@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { DoseEvent, LabResult, SimulationResult, runSimulation, createCalibrationInterpolator } from '../../logic';
+import { computeDataHash } from '../utils/dataHash';
 
 interface AppDataContextType {
     events: DoseEvent[];
@@ -80,6 +81,12 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         localStorage.setItem('hrt-lab-results', value);
         finalizeLocalUpdate('labResults', 'hrt-lab-results');
     }, [labResults]);
+
+    useEffect(() => {
+        const lang = localStorage.getItem('hrt-lang') || 'en';
+        const hash = computeDataHash({ events, weight, labResults, lang });
+        localStorage.setItem('hrt-data-hash', hash);
+    }, [events, weight, labResults]);
 
     // Update current time every minute
     useEffect(() => {

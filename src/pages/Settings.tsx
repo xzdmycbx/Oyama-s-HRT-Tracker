@@ -14,6 +14,7 @@ import PasswordDisplayModal from '../components/PasswordDisplayModal';
 import PasswordInputModal from '../components/PasswordInputModal';
 import DisclaimerModal from '../components/DisclaimerModal';
 import { encryptData, decryptData, DoseEvent, LabResult } from '../../logic';
+import { computeDataHash } from '../utils/dataHash';
 import { APP_VERSION } from '../constants';
 import flagCN from '../flag_svg/🇨🇳.svg';
 import flagTW from '../flag_svg/🇹🇼.svg';
@@ -125,6 +126,10 @@ const Settings: React.FC = () => {
 
       if (!newEvents.length && !newWeight && !newLabs.length) throw new Error('No valid entries');
 
+      const nextEvents = newEvents.length > 0 ? newEvents : events;
+      const nextWeight = newWeight !== undefined ? newWeight : weight;
+      const nextLabs = newLabs.length > 0 ? newLabs : labResults;
+
       if (newEvents.length > 0) {
         setEvents(newEvents);
         localStorage.setItem('hrt-events', JSON.stringify(newEvents));
@@ -138,6 +143,18 @@ const Settings: React.FC = () => {
         localStorage.setItem('hrt-lab-results', JSON.stringify(newLabs));
       }
 
+      const lastModified = new Date().toISOString();
+      localStorage.setItem('hrt-last-modified', lastModified);
+      const langValue = localStorage.getItem('hrt-lang') || lang;
+      const dataHash = computeDataHash({
+        events: nextEvents,
+        weight: nextWeight,
+        labResults: nextLabs,
+        lang: langValue,
+      });
+      localStorage.setItem('hrt-data-hash', dataHash);
+      window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-import', lastModified } }));
+
       showDialog('alert', t('drawer.import_success'));
       return true;
     } catch (err) {
@@ -147,9 +164,13 @@ const Settings: React.FC = () => {
     }
   };
 
-  const importEventsFromJson = (text: string): boolean => {
+  const importEventsFromJson = async (text: string): Promise<boolean> => {
     try {
       const parsed = JSON.parse(text);
+      const confirmation = await showDialog('confirm', t('import.overwrite_confirm'));
+      if (confirmation !== 'confirm') {
+        return false;
+      }
 
       if (parsed.encrypted && parsed.iv && parsed.salt && parsed.data) {
         setPendingImportText(text);
@@ -236,6 +257,17 @@ const Settings: React.FC = () => {
     showDialog('confirm', t('drawer.clear_confirm'), () => {
       setEvents([]);
       localStorage.setItem('hrt-events', JSON.stringify([]));
+      const lastModified = new Date().toISOString();
+      localStorage.setItem('hrt-last-modified', lastModified);
+      const langValue = localStorage.getItem('hrt-lang') || lang;
+      const dataHash = computeDataHash({
+        events: [],
+        weight,
+        labResults,
+        lang: langValue,
+      });
+      localStorage.setItem('hrt-data-hash', dataHash);
+      window.dispatchEvent(new CustomEvent('hrt-local-data-updated', { detail: { key: 'hrt-events', lastModified } }));
     });
   };
 

@@ -3,7 +3,7 @@ import { useTranslation } from '../contexts/LanguageContext';
 import jsQR from 'jsqr';
 import { X, QrCode, Activity, ImageIcon, Upload } from 'lucide-react';
 
-const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClose: () => void; onImportJson: (text: string) => boolean }) => {
+const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClose: () => void; onImportJson: (text: string) => Promise<boolean> }) => {
     const { t } = useTranslation();
     const [activeTab, setActiveTab] = useState<'qr' | 'json'>('qr');
     const [text, setText] = useState("");
@@ -24,9 +24,9 @@ const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClo
         const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = () => {
+        reader.onload = async () => {
             const content = reader.result as string;
-            if (onImportJson(content)) {
+            if (await onImportJson(content)) {
                 onClose();
             }
         };
@@ -34,8 +34,8 @@ const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClo
         e.target.value = "";
     };
 
-    const handleTextImport = () => {
-        if (onImportJson(text)) {
+    const handleTextImport = async () => {
+        if (await onImportJson(text)) {
             onClose();
         }
     };
@@ -47,7 +47,7 @@ const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClo
         const reader = new FileReader();
         reader.onload = () => {
             const img = new window.Image();
-            img.onload = () => {
+            img.onload = async () => {
                 const canvas = canvasRef.current;
                 const ctx = canvas?.getContext('2d');
                 if (!canvas || !ctx) return;
@@ -57,7 +57,7 @@ const ImportModal = ({ isOpen, onClose, onImportJson }: { isOpen: boolean; onClo
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 const code = jsQR(imageData.data, canvas.width, canvas.height);
                 if (code?.data) {
-                    if (onImportJson(code.data)) {
+                    if (await onImportJson(code.data)) {
                         onClose();
                     }
                 } else {
