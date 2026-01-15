@@ -4,7 +4,6 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { DialogProvider } from './contexts/DialogContext';
 import { AppDataProvider } from './contexts/AppDataContext';
 import { useAuth } from './contexts/AuthContext';
-import { useSecurityPassword } from './contexts/SecurityPasswordContext';
 import MainLayout from './components/MainLayout';
 import SecurityPasswordGate from './components/SecurityPasswordGate';
 import OverviewPage from './pages/OverviewPage';
@@ -30,14 +29,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
-const ShareAuthorizationGuard: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { hasSecurityPassword } = useSecurityPassword();
-  if (hasSecurityPassword === null) {
-    return null;
-  }
-  return hasSecurityPassword ? <Navigate to="/account" replace /> : children;
-};
-
 const App = () => (
     <LanguageProvider>
         <DialogProvider>
@@ -59,7 +50,7 @@ const App = () => (
                         {/* Account pages - protected */}
                         <Route path="account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
                         <Route path="account/devices" element={<ProtectedRoute><AccountDevices /></ProtectedRoute>} />
-                        <Route path="account/shares" element={<ProtectedRoute><ShareAuthorizationGuard><AccountShares /></ShareAuthorizationGuard></ProtectedRoute>} />
+                        <Route path="account/shares" element={<ProtectedRoute><AccountShares /></ProtectedRoute>} />
                         <Route path="account/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
                         <Route path="account/security" element={<ProtectedRoute><SecurityPassword /></ProtectedRoute>} />
 
