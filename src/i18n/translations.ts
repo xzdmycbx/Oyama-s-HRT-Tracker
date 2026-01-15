@@ -261,8 +261,6 @@ export const TRANSLATIONS_BASE = {
         "account.devicesDesc": "管理已登录的设备",
         "account.shares": "分享管理",
         "account.sharesDesc": "管理数据分享",
-        "account.authorizations": "授权管理",
-        "account.authorizationsDesc": "管理数据访问权限",
         "account.settings": "设置",
         "account.settingsDesc": "应用偏好设置",
         "account.logout": "退出登录",
@@ -351,24 +349,6 @@ export const TRANSLATIONS_BASE = {
         "shares.typeCopyDesc": "分享当前数据快照",
         "shares.typeRealtimeDesc": "始终显示最新数据",
 
-        // Authorizations page
-        "authorizations.title": "授权管理",
-        "authorizations.create": "授予授权",
-        "authorizations.granted": "已授权给他人",
-        "authorizations.received": "从他人接收",
-        "authorizations.noGranted": "暂无授权给他人的记录",
-        "authorizations.noReceived": "暂无从他人接收的授权",
-        "authorizations.revokeConfirm": "撤销授权",
-        "authorizations.revoked": "已撤销授权",
-        "authorizations.createNew": "授予授权",
-        "authorizations.createDesc": "允许其他用户查看您的数据",
-        "authorizations.username": "用户名",
-        "authorizations.yourPassword": "您的安全密码",
-        "authorizations.fillAllFields": "请填写所有字段",
-        "authorizations.created": "已授权给",
-        "authorizations.grantedAt": "授权时间",
-        "authorizations.receivedAt": "接收时间",
-
         // Common
         "common.loading": "加载中...",
         "common.success": "成功",
@@ -400,7 +380,6 @@ export const TRANSLATIONS_BASE = {
         "security.info.title": "重要提示",
         "security.info.1": "仅使用6位数字（0-9）",
         "security.info.2": "此密码用于加密您的数据",
-        "security.info.3": "查看他人授权的数据时需要此密码",
         "security.info.warning": "如果忘记此密码，您的加密数据将无法恢复",
         "security.gate.title": "输入安全密码",
         "security.gate.description": "输入您的6位PIN以访问加密数据",
@@ -409,20 +388,6 @@ export const TRANSLATIONS_BASE = {
         "security.gate.hint2": "7天只需输入一次",
 
         // Authorized Data Viewing
-        "auth.title": "授权数据",
-        "auth.subtitle": "查看授权给您的用户数据",
-        "auth.readOnly": "只读模式",
-        "auth.noAuthorizations": "暂无用户授权您查看数据",
-        "auth.authorizedOn": "授权时间",
-        "auth.enterPassword": "输入您的安全密码",
-        "auth.viewingData": "正在查看",
-        "auth.viewData": "查看数据",
-        "auth.error.invalidPassword": "密码必须为6位数字",
-        "auth.info.title": "工作原理",
-        "auth.info.1": "点击用户以查看他们的数据",
-        "auth.info.2": "输入您的安全密码来解密他们的数据",
-        "auth.info.3": "您只能查看数据，不能编辑",
-        "auth.info.4": "授权可随时被所有者撤销",
 
         // Devices
         "devices.enterPasswordConfirm": "输入您的账户密码以确认",
@@ -433,8 +398,6 @@ export const TRANSLATIONS_BASE = {
         // Account
         "account.securityPassword": "安全密码",
         "account.securityPasswordDesc": "管理用于数据加密的6位PIN",
-        "account.authorizedData": "查看授权数据",
-        "account.authorizedDataDesc": "查看授权给您的用户数据",
     },
 
     en: {
@@ -697,8 +660,6 @@ export const TRANSLATIONS_BASE = {
         "account.devicesDesc": "Manage logged in devices",
         "account.shares": "Shares",
         "account.sharesDesc": "Manage data shares",
-        "account.authorizations": "Authorizations",
-        "account.authorizationsDesc": "Manage data access",
         "account.settings": "Settings",
         "account.settingsDesc": "App preferences",
         "account.logout": "Logout",
@@ -787,24 +748,6 @@ export const TRANSLATIONS_BASE = {
         "shares.typeCopyDesc": "Share current data snapshot",
         "shares.typeRealtimeDesc": "Always show latest data",
 
-        // Authorizations page
-        "authorizations.title": "Authorizations",
-        "authorizations.create": "Grant Authorization",
-        "authorizations.granted": "Granted to Others",
-        "authorizations.received": "Received from Others",
-        "authorizations.noGranted": "No authorizations granted",
-        "authorizations.noReceived": "No authorizations received",
-        "authorizations.revokeConfirm": "Revoke authorization for",
-        "authorizations.revoked": "Authorization revoked",
-        "authorizations.createNew": "Grant Authorization",
-        "authorizations.createDesc": "Allow another user to view your data",
-        "authorizations.username": "Username",
-        "authorizations.yourPassword": "Your security password",
-        "authorizations.fillAllFields": "Please fill all fields",
-        "authorizations.created": "Authorization created for",
-        "authorizations.grantedAt": "Granted at",
-        "authorizations.receivedAt": "Received at",
-
         // Common
         "common.loading": "Loading...",
         "common.success": "Success",
@@ -836,7 +779,6 @@ export const TRANSLATIONS_BASE = {
         "security.info.title": "Important",
         "security.info.1": "Use 6 digits (0-9) only",
         "security.info.2": "This password encrypts your data",
-        "security.info.3": "Required to view authorized data from others",
         "security.info.warning": "If you forget this password, your encrypted data cannot be recovered",
         "security.gate.title": "Enter Security Password",
         "security.gate.description": "Enter your 6-digit PIN to access encrypted data",
@@ -845,20 +787,6 @@ export const TRANSLATIONS_BASE = {
         "security.gate.hint2": "You only need to enter it once every 7 days",
 
         // Authorized Data Viewing
-        "auth.title": "Authorized Data",
-        "auth.subtitle": "View data from users who authorized you",
-        "auth.readOnly": "Read-only view",
-        "auth.noAuthorizations": "No one has authorized you to view their data yet",
-        "auth.authorizedOn": "Authorized on",
-        "auth.enterPassword": "Enter Your Security Password",
-        "auth.viewingData": "Viewing",
-        "auth.viewData": "View Data",
-        "auth.error.invalidPassword": "Password must be 6 digits",
-        "auth.info.title": "How it works",
-        "auth.info.1": "Click on a user to view their data",
-        "auth.info.2": "Enter YOUR security password to decrypt their data",
-        "auth.info.3": "You can only view data, not edit it",
-        "auth.info.4": "Authorization can be revoked by the owner at any time",
 
         // Devices
         "devices.enterPasswordConfirm": "Enter your account password to confirm",
@@ -869,8 +797,6 @@ export const TRANSLATIONS_BASE = {
         // Account
         "account.securityPassword": "Security Password",
         "account.securityPasswordDesc": "Manage 6-digit PIN for data encryption",
-        "account.authorizedData": "View Authorized Data",
-        "account.authorizedDataDesc": "View data from users who authorized you",
     },
 
     ru: {

@@ -20,11 +20,6 @@ import type {
   UpdateShareLockRequest,
   ViewShareRequest,
   ViewShareResponse,
-  CreateAuthorizationRequest,
-  CreateAuthorizationResponse,
-  Authorization,
-  ViewAuthorizedDataRequest,
-  ViewAuthorizedDataResponse,
   UploadAvatarResponse,
   ChangePasswordRequest,
   ChangePasswordResponse,
@@ -253,35 +248,6 @@ class ApiClient {
     return this.request<ViewShareResponse>(`/shares/${shareId}/view`, {
       method: 'POST',
       body: data ? JSON.stringify(data) : JSON.stringify({}),
-    });
-  }
-
-  // Authorization APIs
-  async createAuthorization(data: CreateAuthorizationRequest): Promise<ApiResponse<CreateAuthorizationResponse>> {
-    return this.request<CreateAuthorizationResponse>('/authorizations', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async revokeAuthorization(viewerUsername: string): Promise<ApiResponse<void>> {
-    return this.request<void>(`/authorizations/${viewerUsername}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async getGrantedAuthorizations(): Promise<ApiResponse<Authorization[]>> {
-    return this.request<Authorization[]>('/authorizations/granted');
-  }
-
-  async getReceivedAuthorizations(): Promise<ApiResponse<Authorization[]>> {
-    return this.request<Authorization[]>('/authorizations/received');
-  }
-
-  async viewAuthorizedData(data: ViewAuthorizedDataRequest): Promise<ApiResponse<ViewAuthorizedDataResponse>> {
-    return this.request<ViewAuthorizedDataResponse>('/authorizations/view', {
-      method: 'POST',
-      body: JSON.stringify(data),
     });
   }
 

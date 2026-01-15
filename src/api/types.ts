@@ -122,32 +122,6 @@ export interface ViewShareResponse {
   share_type: ShareType;
 }
 
-// Authorization Types
-export interface CreateAuthorizationRequest {
-  viewer_username: string;
-}
-
-export interface CreateAuthorizationResponse {
-  viewer_username: string;
-}
-
-export interface Authorization {
-  viewer_username?: string;
-  owner_username?: string;
-  created_at: string;
-}
-
-export interface ViewAuthorizedDataRequest {
-  owner_username: string;
-  password: string;
-}
-
-export interface ViewAuthorizedDataResponse {
-  data: any;
-  owner: string;
-  is_encrypted: boolean;
-}
-
 // Avatar Types
 export interface UploadAvatarResponse {
   avatar: string;

@@ -7,7 +7,6 @@ import Register from '../pages/Register';
 import Account from '../pages/Account';
 import AccountDevices from '../pages/AccountDevices';
 import AccountShares from '../pages/AccountShares';
-import AccountAuthorizations from '../pages/AccountAuthorizations';
 import SettingsPage from '../pages/Settings';
 import ShareView from '../pages/ShareView';
 
@@ -35,7 +34,6 @@ const AppLayout: React.FC = () => {
       '/account': { showBackButton: true, centerContent: false },
       '/account/devices': { showBackButton: false, centerContent: false }, // Has own header
       '/account/shares': { showBackButton: false, centerContent: false }, // Has own header
-      '/account/authorizations': { showBackButton: false, centerContent: false }, // Has own header
       '/account/settings': { showBackButton: false, centerContent: false }, // Has own header
       '/share/:shareId': { showBackButton: true, centerContent: false },
     };
@@ -113,7 +111,6 @@ const AppLayout: React.FC = () => {
               <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
               <Route path="/account/devices" element={<ProtectedRoute><AccountDevices /></ProtectedRoute>} />
               <Route path="/account/shares" element={<ProtectedRoute><AccountShares /></ProtectedRoute>} />
-              <Route path="/account/authorizations" element={<ProtectedRoute><AccountAuthorizations /></ProtectedRoute>} />
               <Route path="/account/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
               <Route path="/share/:shareId" element={<ShareView />} />
             </Routes>
