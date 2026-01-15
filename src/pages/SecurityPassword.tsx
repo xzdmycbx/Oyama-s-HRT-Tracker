@@ -311,7 +311,6 @@ const SecurityPassword: React.FC = () => {
           <ul className="text-sm text-blue-800 space-y-1 ml-6 list-disc">
             <li>{t('security.info.1') || 'Use 6 digits (0-9) only'}</li>
             <li>{t('security.info.2') || 'This password encrypts your data'}</li>
-            <li>{t('security.info.3') || 'Required to view authorized data from others'}</li>
             <li className="text-red-600 font-semibold">
               {t('security.info.warning') || 'If you forget this password, your encrypted data cannot be recovered'}
             </li>

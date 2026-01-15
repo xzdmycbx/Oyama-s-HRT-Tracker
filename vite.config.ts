@@ -25,6 +25,12 @@ export default defineConfig(({ mode }) => {
             orientation: 'portrait',
             icons: [
               {
+                src: 'favicon.ico',
+                sizes: '64x64 32x32 24x24 16x16',
+                type: 'image/x-icon',
+                purpose: 'any'
+              },
+              {
                 src: 'icon.svg',
                 sizes: 'any',
                 type: 'image/svg+xml',

@@ -16,10 +16,8 @@ import Register from './pages/Register';
 import Account from './pages/Account';
 import AccountDevices from './pages/AccountDevices';
 import AccountShares from './pages/AccountShares';
-import AccountAuthorizations from './pages/AccountAuthorizations';
 import AccountSettings from './pages/Settings';
 import SecurityPassword from './pages/SecurityPassword';
-import AuthorizedDataView from './pages/AuthorizedDataView';
 import ShareView from './pages/ShareView';
 
 // Protected route component
@@ -62,10 +60,8 @@ const App = () => (
                         <Route path="account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
                         <Route path="account/devices" element={<ProtectedRoute><AccountDevices /></ProtectedRoute>} />
                         <Route path="account/shares" element={<ProtectedRoute><ShareAuthorizationGuard><AccountShares /></ShareAuthorizationGuard></ProtectedRoute>} />
-                        <Route path="account/authorizations" element={<ProtectedRoute><ShareAuthorizationGuard><AccountAuthorizations /></ShareAuthorizationGuard></ProtectedRoute>} />
                         <Route path="account/settings" element={<ProtectedRoute><AccountSettings /></ProtectedRoute>} />
                         <Route path="account/security" element={<ProtectedRoute><SecurityPassword /></ProtectedRoute>} />
-                        <Route path="account/authorized-data" element={<ProtectedRoute><AuthorizedDataView /></ProtectedRoute>} />
 
                         {/* Share view */}
                         <Route path="share/:shareId" element={<ShareView />} />

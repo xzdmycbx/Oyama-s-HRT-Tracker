@@ -5,7 +5,7 @@ import { useCloudSync } from '../contexts/CloudSyncContext';
 import { useSecurityPassword } from '../contexts/SecurityPasswordContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from '../contexts/DialogContext';
-import { User, Smartphone, Share2, Users, LogOut, Settings, Cloud, Camera, Trash2, Key, Lock } from 'lucide-react';
+import { User, Smartphone, Share2, LogOut, Settings, Cloud, Camera, Trash2, Key, Lock } from 'lucide-react';
 import apiClient from '../api/client';
 
 const Account: React.FC = () => {
@@ -272,26 +272,6 @@ const Account: React.FC = () => {
               </Link>
             )}
 
-            {isShareAccessDisabled ? (
-              <div className={managementDisabledClass} aria-disabled="true">
-                <Users size={20} className="text-gray-600" />
-                <div className="flex-1">
-                  <p className="font-bold text-gray-900 text-sm">{t('account.authorizations') || 'Authorizations'}</p>
-                  <p className="text-xs text-gray-500">{t('account.authorizationsDesc') || 'Manage data access'}</p>
-                </div>
-              </div>
-            ) : (
-              <Link
-                to="/account/authorizations"
-                className={managementLinkClass}
-              >
-                <Users size={20} className="text-gray-600" />
-                <div className="flex-1">
-                  <p className="font-bold text-gray-900 text-sm">{t('account.authorizations') || 'Authorizations'}</p>
-                  <p className="text-xs text-gray-500">{t('account.authorizationsDesc') || 'Manage data access'}</p>
-                </div>
-              </Link>
-            )}
 
             <Link
               to="/account/security"
@@ -315,16 +295,6 @@ const Account: React.FC = () => {
               </div>
             </Link>
 
-            <Link
-              to="/account/authorized-data"
-              className={managementLinkClass}
-            >
-              <Users size={20} className="text-blue-600" />
-              <div className="flex-1">
-                <p className="font-bold text-gray-900 text-sm">{t('account.authorizedData') || 'View Authorized Data'}</p>
-                <p className="text-xs text-gray-500">{t('account.authorizedDataDesc') || 'View data from users who authorized you'}</p>
-              </div>
-            </Link>
 
             <button
               onClick={() => setShowPasswordModal(true)}
