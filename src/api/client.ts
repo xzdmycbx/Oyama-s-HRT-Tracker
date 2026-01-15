@@ -59,8 +59,8 @@ class ApiClient {
 
     // Public endpoints that don't need Authorization
     const publicEndpoints = ['/auth/login', '/auth/register', '/auth/refresh', '/health'];
-    const needsAuth = !publicEndpoints.some(ep => endpoint.startsWith(ep)) &&
-                      !endpoint.match(/^\/shares\/[^/]+\/view$/); // /shares/:id/view is also public
+    const isShareView = !!endpoint.match(/^\/shares\/[^/]+\/view$/);
+    const needsAuth = !publicEndpoints.some(ep => endpoint.startsWith(ep)) && !isShareView;
 
     if (this.accessToken && needsAuth) {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
@@ -92,7 +92,7 @@ class ApiClient {
         if (response.status === 401 &&
             this.refreshTokenCallback &&
             !this.isRefreshing &&
-            !publicEndpoints.some(ep => endpoint.startsWith(ep)) &&
+            needsAuth &&
             !hasRetried) {
           this.isRefreshing = true;
           const refreshed = await this.refreshTokenCallback();

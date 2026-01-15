@@ -49,9 +49,12 @@ const ShareView: React.FC = () => {
         labResults: response.data.data.labResults || [],
       });
     } else {
-      if (response.error?.includes('password') || response.error?.includes('Password')) {
+      if (response.status === 400) {
         setNeedsPassword(true);
         setError('');
+      } else if (response.status === 401) {
+        setNeedsPassword(true);
+        setError(t('shares.invalidPassword') || 'Incorrect password');
       } else {
         setError(response.error || 'Failed to load share');
       }

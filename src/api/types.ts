@@ -85,6 +85,7 @@ export type ShareType = 'realtime' | 'copy';
 export interface CreateShareRequest {
   share_type: ShareType;
   password?: string;
+  security_password?: string;
   max_attempts?: number;
 }
 
@@ -109,8 +110,7 @@ export interface UpdateSharePasswordRequest {
 }
 
 export interface UpdateShareLockRequest {
-  is_locked?: boolean;
-  max_attempts?: number;
+  max_attempts: number;
 }
 
 export interface ViewShareRequest {
