@@ -9,6 +9,8 @@ import type { Share, ShareType } from '../api/types';
 import { Share2, ArrowLeft, Plus, Copy, Trash2, Lock, Unlock, Eye, Clock, Zap } from 'lucide-react';
 import { getSecurityPassword } from '../utils/crypto';
 
+const DEFAULT_MAX_ATTEMPTS = 999999;
+
 const AccountShares: React.FC = () => {
   const { t } = useTranslation();
   const { showDialog } = useDialog();
@@ -54,8 +56,10 @@ const AccountShares: React.FC = () => {
       return;
     }
 
-    const parsedMaxAttempts = maxAttemptsInput === '' ? undefined : Number.parseInt(maxAttemptsInput, 10);
-    if (parsedMaxAttempts !== undefined && (Number.isNaN(parsedMaxAttempts) || parsedMaxAttempts < 0)) {
+    const parsedMaxAttempts = maxAttemptsInput === ''
+      ? DEFAULT_MAX_ATTEMPTS
+      : Number.parseInt(maxAttemptsInput, 10);
+    if (Number.isNaN(parsedMaxAttempts) || parsedMaxAttempts < 0) {
       setError(t('shares.invalidMaxAttempts') || 'Max attempts cannot be negative');
       return;
     }
@@ -111,7 +115,7 @@ const AccountShares: React.FC = () => {
 
   const handleUpdateLock = async (shareId: string) => {
     const value = shareMaxAttempts[shareId];
-    const parsed = Number.parseInt(value, 10);
+    const parsed = value === '' ? DEFAULT_MAX_ATTEMPTS : Number.parseInt(value, 10);
 
     if (Number.isNaN(parsed) || parsed < 0) {
       showDialog('alert', t('shares.invalidMaxAttempts') || 'Max attempts cannot be negative');
@@ -223,7 +227,7 @@ const AccountShares: React.FC = () => {
                       <div>
                         {t('shares.attempts') || 'Attempts'}: {share.attempt_count}
                         {share.has_password
-                          ? ` / ${share.max_attempts === 0 ? (t('shares.unlimited') || 'Unlimited') : share.max_attempts}`
+                          ? ` / ${share.max_attempts >= DEFAULT_MAX_ATTEMPTS ? (t('shares.unlimited') || 'Unlimited') : share.max_attempts}`
                           : ''}
                       </div>
                       <div>

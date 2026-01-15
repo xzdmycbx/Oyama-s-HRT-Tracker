@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useCloudSync } from '../contexts/CloudSyncContext';
-import { useSecurityPassword } from '../contexts/SecurityPasswordContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from '../contexts/DialogContext';
 import { User, Smartphone, Share2, LogOut, Settings, Cloud, Camera, Trash2, Key, Lock } from 'lucide-react';
@@ -11,7 +10,6 @@ import apiClient from '../api/client';
 const Account: React.FC = () => {
   const { user, logout } = useAuth();
   const { isSyncing, lastSyncTime, syncError } = useCloudSync();
-  const { hasSecurityPassword } = useSecurityPassword();
   const { t } = useTranslation();
   const { showDialog } = useDialog();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,10 +23,8 @@ const Account: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
-  const isShareAccessDisabled = hasSecurityPassword === true;
   const managementItemClass = 'flex items-center gap-3 px-4 py-4 transition';
   const managementLinkClass = `${managementItemClass} hover:bg-gray-50`;
-  const managementDisabledClass = `${managementItemClass} opacity-50 cursor-not-allowed`;
 
   const handleLogout = async () => {
     const choice = await showDialog('confirm',
@@ -251,26 +247,16 @@ const Account: React.FC = () => {
               </div>
             </Link>
 
-            {isShareAccessDisabled ? (
-              <div className={managementDisabledClass} aria-disabled="true">
-                <Share2 size={20} className="text-gray-600" />
-                <div className="flex-1">
-                  <p className="font-bold text-gray-900 text-sm">{t('account.shares') || 'Shares'}</p>
-                  <p className="text-xs text-gray-500">{t('account.sharesDesc') || 'Manage data shares'}</p>
-                </div>
+            <Link
+              to="/account/shares"
+              className={managementLinkClass}
+            >
+              <Share2 size={20} className="text-gray-600" />
+              <div className="flex-1">
+                <p className="font-bold text-gray-900 text-sm">{t('account.shares') || 'Shares'}</p>
+                <p className="text-xs text-gray-500">{t('account.sharesDesc') || 'Manage data shares'}</p>
               </div>
-            ) : (
-              <Link
-                to="/account/shares"
-                className={managementLinkClass}
-              >
-                <Share2 size={20} className="text-gray-600" />
-                <div className="flex-1">
-                  <p className="font-bold text-gray-900 text-sm">{t('account.shares') || 'Shares'}</p>
-                  <p className="text-xs text-gray-500">{t('account.sharesDesc') || 'Manage data shares'}</p>
-                </div>
-              </Link>
-            )}
+            </Link>
 
 
             <Link
