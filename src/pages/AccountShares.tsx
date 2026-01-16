@@ -158,7 +158,7 @@ const AccountShares: React.FC = () => {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-4">
             <Link to="/account" className="text-gray-600 hover:text-gray-900">
               <ArrowLeft size={24} />
@@ -171,7 +171,7 @@ const AccountShares: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Create Button */}
         <button
           onClick={() => setShowCreateModal(true)}
@@ -193,7 +193,7 @@ const AccountShares: React.FC = () => {
         ) : (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
             {shares.map((share) => (
-              <div key={share.share_id} className="p-4">
+              <div key={share.share_id} className="p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
                     share.share_type === 'realtime' ? 'bg-blue-50' : 'bg-pink-50'
@@ -205,8 +205,8 @@ const AccountShares: React.FC = () => {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono break-all">
                         {share.share_id}
                       </code>
                       <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
@@ -227,31 +227,31 @@ const AccountShares: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500 space-y-1 mb-3">
+                    <div className="text-xs text-gray-500 grid gap-1 mb-3 sm:grid-cols-2">
                       <div className="flex items-center gap-2">
                         <Eye size={12} />
                         {t('shares.views') || 'Views'}: {share.view_count}
                       </div>
-                      <div>
+                      <div className="sm:text-right">
                         {t('shares.attempts') || 'Attempts'}: {share.attempt_count}
                         {share.has_password
                           ? ` / ${share.max_attempts === 0 ? (t('shares.unlimited') || 'Unlimited') : share.max_attempts}`
                           : ''}
                       </div>
-                      <div>
+                      <div className="sm:col-span-2">
                         {t('shares.created') || 'Created'}: {new Date(share.created_at).toLocaleString()}
                       </div>
                     </div>
                     <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
                       <button
                         onClick={() => handleCopyShareUrl(share.share_id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition text-xs font-medium"
+                        className="w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition text-xs font-medium"
                       >
                         <Copy size={14} />
                         {t('shares.copyUrl') || 'Copy URL'}
                       </button>
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2">
-                        <div className="flex items-center gap-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2 w-full sm:w-auto">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                           <select
                             value={shareMaxAttempts[share.share_id] ?? '0'}
                             onChange={(e) => {
@@ -261,7 +261,7 @@ const AccountShares: React.FC = () => {
                               }));
                             }}
                             disabled={!share.has_password}
-                            className="bg-white border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                            className="w-full sm:w-auto bg-white border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500"
                           >
                             {maxAttemptOptions.map((option) => (
                               <option key={`${share.share_id}-${option.value}`} value={option.value}>
@@ -274,7 +274,7 @@ const AccountShares: React.FC = () => {
                         <button
                           onClick={() => handleUpdateLock(share.share_id)}
                           disabled={!share.has_password}
-                          className={`flex items-center justify-center gap-1 px-2 py-1 rounded-md transition text-xs font-medium ${
+                          className={`w-full sm:w-auto flex items-center justify-center gap-1 px-2 py-1 rounded-md transition text-xs font-medium ${
                             share.has_password
                               ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                               : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -286,7 +286,7 @@ const AccountShares: React.FC = () => {
                       </div>
                       <button
                         onClick={() => handleDeleteShare(share.share_id)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-xs font-medium"
+                        className="w-full sm:w-auto flex items-center justify-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-xs font-medium"
                       >
                         <Trash2 size={14} />
                         {t('shares.delete') || 'Delete'}
