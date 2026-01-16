@@ -1,29 +1,38 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from '../contexts/DialogContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useSecurityPassword } from '../contexts/SecurityPasswordContext';
 import apiClient from '../api/client';
-import type { ShareType } from '../api/types';
+import type { Share, ShareType } from '../api/types';
 import { Share2, ArrowLeft, Plus, Copy, Trash2, Lock, Unlock, Eye, Clock, Zap } from 'lucide-react';
+import { getSecurityPassword } from '../utils/crypto';
+import PINInput from '../components/PINInput';
 
-interface Share {
-  share_id: string;
-  created_at: string;
-  view_count: number;
-  is_password_protected: boolean;
-  is_locked: boolean;
-  share_type: ShareType;
-}
+const MAX_ATTEMPT_OPTIONS = [0, 5, 10, 20, 50];
 
 const AccountShares: React.FC = () => {
   const { t } = useTranslation();
   const { showDialog } = useDialog();
+  const { user } = useAuth();
+  const { hasSecurityPassword } = useSecurityPassword();
   const [shares, setShares] = useState<Share[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [shareHasPassword, setShareHasPassword] = useState(false);
   const [sharePassword, setSharePassword] = useState('');
   const [shareType, setShareType] = useState<ShareType>('copy');
+  const [maxAttemptsSelection, setMaxAttemptsSelection] = useState('0');
+  const [shareMaxAttempts, setShareMaxAttempts] = useState<Record<string, string>>({});
   const [error, setError] = useState('');
+  const maxAttemptOptions = useMemo(
+    () => MAX_ATTEMPT_OPTIONS.map((value) => ({
+      value: value.toString(),
+      label: value === 0 ? (t('shares.unlimited') || 'Unlimited') : value.toString(),
+    })),
+    [t]
+  );
 
   useEffect(() => {
     loadShares();
@@ -34,27 +43,67 @@ const AccountShares: React.FC = () => {
     const response = await apiClient.getShares();
     if (response.success && response.data) {
       setShares(response.data);
+      setShareMaxAttempts(
+        response.data.reduce<Record<string, string>>((acc, share) => {
+          acc[share.share_id] = share.max_attempts.toString();
+          return acc;
+        }, {})
+      );
     }
     setLoading(false);
   };
 
   const handleCreateShare = async () => {
     setError('');
+    if (shareType === 'realtime' && hasSecurityPassword) {
+      setError(t('shares.realtimeDisabled') || 'Realtime share is unavailable when security password is enabled.');
+      return;
+    }
+
+    if (shareHasPassword && !/^\d{6}$/.test(sharePassword)) {
+      setError(t('shares.invalidPasswordFormat') || 'Password must be 6 digits');
+      return;
+    }
+
+    const parsedMaxAttempts = Number.parseInt(maxAttemptsSelection, 10);
+    if (Number.isNaN(parsedMaxAttempts) || parsedMaxAttempts < 0) {
+      setError(t('shares.invalidMaxAttempts') || 'Max attempts cannot be negative');
+      return;
+    }
+
+    let securityPassword: string | undefined;
+    if (shareType === 'copy' && hasSecurityPassword) {
+      if (!user?.username) {
+        setError(t('shares.securityPasswordRequired') || 'Security password required to create a copy share.');
+        return;
+      }
+      const savedPassword = await getSecurityPassword(user.username);
+      if (!savedPassword) {
+        setError(t('shares.securityPasswordRequired') || 'Security password required to create a copy share.');
+        return;
+      }
+      securityPassword = savedPassword;
+    }
+
     const response = await apiClient.createShare({
       share_type: shareType,
-      password: sharePassword || undefined,
+      password: shareHasPassword ? sharePassword : undefined,
+      security_password: securityPassword,
+      max_attempts: shareHasPassword ? parsedMaxAttempts : undefined,
     });
 
     if (response.success && response.data) {
       setShowCreateModal(false);
+      setShareHasPassword(false);
       setSharePassword('');
       setShareType('copy');
+      setMaxAttemptsSelection('0');
 
       const shareUrl = `${window.location.origin}/share/${response.data.share_id}`;
       const shareTypeText = shareType === 'copy'
         ? (t('shares.typeCopy') || '副本分享')
         : (t('shares.typeRealtime') || '实时分享');
-      const message = sharePassword
+      const message = shareHasPassword
         ? `${shareTypeText}\n${t('shares.shareCreatedWithPassword') || 'Share created! URL copied to clipboard. Password:'} ${sharePassword}\n\n${shareUrl}`
         : `${shareTypeText}\n${t('shares.shareCreated') || 'Share created! URL copied to clipboard:'}\n\n${shareUrl}`;
 
@@ -72,15 +121,21 @@ const AccountShares: React.FC = () => {
     showDialog('alert', t('shares.urlCopied') || 'Share URL copied to clipboard');
   };
 
-  const handleToggleLock = async (shareId: string, currentlyLocked: boolean) => {
+  const handleUpdateLock = async (shareId: string) => {
+    const value = shareMaxAttempts[shareId];
+    const parsed = Number.parseInt(value, 10);
+
+    if (Number.isNaN(parsed) || parsed < 0) {
+      showDialog('alert', t('shares.invalidMaxAttempts') || 'Max attempts cannot be negative');
+      return;
+    }
+
     const response = await apiClient.updateShareLock(shareId, {
-      is_locked: !currentlyLocked,
+      max_attempts: parsed,
     });
 
     if (response.success) {
-      showDialog('alert', currentlyLocked
-        ? (t('shares.unlocked') || 'Share unlocked')
-        : (t('shares.locked') || 'Share locked'));
+      showDialog('alert', t('shares.lockSettingsUpdated') || 'Share lock settings updated');
       loadShares();
     } else {
       showDialog('alert', response.error || 'Failed to update share');
@@ -139,7 +194,7 @@ const AccountShares: React.FC = () => {
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
             {shares.map((share) => (
               <div key={share.share_id} className="p-4">
-                <div className="flex items-start gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
                     share.share_type === 'realtime' ? 'bg-blue-50' : 'bg-pink-50'
                   }`}>
@@ -163,7 +218,7 @@ const AccountShares: React.FC = () => {
                           ? (t('shares.typeRealtime') || '实时')
                           : (t('shares.typeCopy') || '副本')}
                       </span>
-                      {share.is_password_protected && (
+                      {share.has_password && (
                         <Lock size={14} className="text-gray-500" />
                       )}
                       {share.is_locked && (
@@ -178,10 +233,16 @@ const AccountShares: React.FC = () => {
                         {t('shares.views') || 'Views'}: {share.view_count}
                       </div>
                       <div>
+                        {t('shares.attempts') || 'Attempts'}: {share.attempt_count}
+                        {share.has_password
+                          ? ` / ${share.max_attempts === 0 ? (t('shares.unlimited') || 'Unlimited') : share.max_attempts}`
+                          : ''}
+                      </div>
+                      <div>
                         {t('shares.created') || 'Created'}: {new Date(share.created_at).toLocaleString()}
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2">
                       <button
                         onClick={() => handleCopyShareUrl(share.share_id)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition text-xs font-medium"
@@ -189,17 +250,40 @@ const AccountShares: React.FC = () => {
                         <Copy size={14} />
                         {t('shares.copyUrl') || 'Copy URL'}
                       </button>
-                      <button
-                        onClick={() => handleToggleLock(share.share_id, share.is_locked)}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition text-xs font-medium ${
-                          share.is_locked
-                            ? 'bg-green-50 text-green-600 hover:bg-green-100'
-                            : 'bg-amber-50 text-amber-600 hover:bg-amber-100'
-                        }`}
-                      >
-                        {share.is_locked ? <Unlock size={14} /> : <Lock size={14} />}
-                        {share.is_locked ? (t('shares.unlock') || 'Unlock') : (t('shares.lock') || 'Lock')}
-                      </button>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2 py-2">
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={shareMaxAttempts[share.share_id] ?? '0'}
+                            onChange={(e) => {
+                              setShareMaxAttempts((prev) => ({
+                                ...prev,
+                                [share.share_id]: e.target.value,
+                              }));
+                            }}
+                            disabled={!share.has_password}
+                            className="bg-white border border-gray-200 rounded-md px-2 py-1 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-pink-500"
+                          >
+                            {maxAttemptOptions.map((option) => (
+                              <option key={`${share.share_id}-${option.value}`} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-xs text-gray-500">{t('shares.maxAttempts') || 'Max attempts'}</span>
+                        </div>
+                        <button
+                          onClick={() => handleUpdateLock(share.share_id)}
+                          disabled={!share.has_password}
+                          className={`flex items-center justify-center gap-1 px-2 py-1 rounded-md transition text-xs font-medium ${
+                            share.has_password
+                              ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                              : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          }`}
+                        >
+                          {share.is_locked ? <Unlock size={14} /> : <Lock size={14} />}
+                          {t('shares.updateLock') || 'Update lock'}
+                        </button>
+                      </div>
                       <button
                         onClick={() => handleDeleteShare(share.share_id)}
                         className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition text-xs font-medium"
@@ -247,12 +331,17 @@ const AccountShares: React.FC = () => {
                   </span>
                 </button>
                 <button
-                  onClick={() => setShareType('realtime')}
+                  onClick={() => {
+                    if (!hasSecurityPassword) {
+                      setShareType('realtime');
+                    }
+                  }}
+                  disabled={!!hasSecurityPassword}
                   className={`flex flex-col items-center gap-2 px-4 py-3 rounded-xl border-2 transition ${
                     shareType === 'realtime'
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
+                  } ${hasSecurityPassword ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Zap size={24} className={shareType === 'realtime' ? 'text-blue-500' : 'text-gray-400'} />
                   <span className={`text-sm font-medium ${shareType === 'realtime' ? 'text-blue-900' : 'text-gray-600'}`}>
@@ -263,19 +352,82 @@ const AccountShares: React.FC = () => {
                   </span>
                 </button>
               </div>
+              {hasSecurityPassword && (
+                <p className="text-xs text-amber-600 mt-2">
+                  {t('shares.realtimeDisabled') || 'Realtime share is unavailable when security password is enabled.'}
+                </p>
+              )}
             </div>
 
             {/* Password */}
             <p className="text-sm text-gray-600 mb-2">
               {t('shares.createDesc') || 'Optionally set a password to protect this share'}
             </p>
-            <input
-              type="password"
-              value={sharePassword}
-              onChange={(e) => setSharePassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 mb-4"
-              placeholder={t('shares.passwordOptional') || 'Password (optional)'}
-            />
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <label className="text-sm font-medium text-gray-700">
+                {t('shares.enablePassword') || 'Enable password protection'}
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setShareHasPassword((prev) => {
+                    const next = !prev;
+                    if (!next) {
+                      setSharePassword('');
+                      setMaxAttemptsSelection('0');
+                    }
+                    return next;
+                  });
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                  shareHasPassword ? 'bg-pink-600' : 'bg-gray-300'
+                }`}
+                aria-pressed={shareHasPassword}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    shareHasPassword ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {shareHasPassword && (
+              <div className="mb-4 space-y-3">
+                <div className="flex justify-center">
+                  <PINInput
+                    value={sharePassword}
+                    onChange={setSharePassword}
+                    error={!!error && error.includes('digit')}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 text-center">
+                  {t('shares.passwordHint') || 'Use 6 digits. Leave empty for public share.'}
+                </p>
+              </div>
+            )}
+
+            {shareHasPassword && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {t('shares.maxAttempts') || 'Max attempts'}
+                </label>
+                <select
+                  value={maxAttemptsSelection}
+                  onChange={(e) => setMaxAttemptsSelection(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
+                >
+                  {maxAttemptOptions.map((option) => (
+                    <option key={`create-${option.value}`} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-2">
+                  {t('shares.maxAttemptsHint') || 'Leave empty to use a large number (e.g. 999999) for unlimited.'}
+                </p>
+              </div>
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl text-sm mb-4">
@@ -287,8 +439,10 @@ const AccountShares: React.FC = () => {
               <button
                 onClick={() => {
                   setShowCreateModal(false);
+                  setShareHasPassword(false);
                   setSharePassword('');
                   setShareType('copy');
+                  setMaxAttemptsSelection('0');
                   setError('');
                 }}
                 className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition font-medium"

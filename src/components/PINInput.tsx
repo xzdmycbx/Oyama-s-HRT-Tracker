@@ -99,6 +99,7 @@ const PINInput: React.FC<PINInputProps> = ({
       {Array.from({ length }).map((_, index) => {
         const hasValue = !!value[index];
         const isFocused = focusedIndex === index;
+        const shouldMask = hasValue;
 
         return (
           <div key={index} className="relative">
@@ -123,28 +124,27 @@ const PINInput: React.FC<PINInputProps> = ({
                 outline-none
                 ${
                   error
-                    ? 'bg-red-500/10 border-2 border-red-500/50 text-red-400'
+                    ? 'bg-red-50 border-2 border-red-300 text-red-600'
                     : isFocused
-                    ? 'bg-pink-500/10 border-2 border-pink-500/60 text-white shadow-lg shadow-pink-500/20'
+                    ? 'bg-pink-50 border-2 border-pink-400 text-gray-900 shadow-sm shadow-pink-200/60'
                     : hasValue
-                    ? 'bg-white/5 border-2 border-white/20 text-white'
-                    : 'bg-white/5 border-2 border-white/10 text-white/80'
+                    ? 'bg-white border-2 border-gray-200 text-gray-900'
+                    : 'bg-white border-2 border-gray-200 text-gray-700'
                 }
                 ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-text'}
-                ${hasValue && !isFocused ? 'text-transparent' : ''}
-                backdrop-blur-sm
+                ${shouldMask ? 'text-transparent' : ''}
               `}
               style={{
                 caretColor: 'transparent',
                 fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif',
               }}
             />
-            {/* Show dot when has value and not focused - Apple style */}
-            {hasValue && !isFocused && (
+            {/* Show dot when has value - Apple style */}
+            {hasValue && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div
                   className={`w-3 h-3 rounded-full transition-colors duration-200 ${
-                    error ? 'bg-red-400' : 'bg-white'
+                    error ? 'bg-red-500' : isFocused ? 'bg-gray-900' : 'bg-gray-800'
                   }`}
                 />
               </div>

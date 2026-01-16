@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from '../contexts/LanguageContext';
 import apiClient from '../api/client';
 import ResultChart from '../components/ResultChart';
+import PINInput from '../components/PINInput';
 import { Share2, Lock, AlertCircle, ArrowLeft } from 'lucide-react';
 import { DoseEvent, runSimulation, SimulationResult, LabResult, createCalibrationInterpolator } from '../../logic';
 
@@ -49,9 +50,12 @@ const ShareView: React.FC = () => {
         labResults: response.data.data.labResults || [],
       });
     } else {
-      if (response.error?.includes('password') || response.error?.includes('Password')) {
+      if (response.status === 400) {
         setNeedsPassword(true);
         setError('');
+      } else if (response.status === 401) {
+        setNeedsPassword(true);
+        setError(t('shares.invalidPassword') || 'Incorrect password');
       } else {
         setError(response.error || 'Failed to load share');
       }
@@ -105,13 +109,17 @@ const ShareView: React.FC = () => {
               {t('shares.passwordPrompt') || 'This share is password protected'}
             </p>
             <form onSubmit={handlePasswordSubmit} className="max-w-md mx-auto space-y-4">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500"
-                placeholder={t('shares.enterPassword') || 'Enter password'}
-              />
+              <div className="flex justify-center">
+                <PINInput
+                  value={password}
+                  onChange={setPassword}
+                  error={!!error}
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-gray-500 text-center">
+                {t('shares.enterPassword') || 'Enter password'}
+              </p>
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-xl text-sm">
                   {error}
@@ -119,7 +127,8 @@ const ShareView: React.FC = () => {
               )}
               <button
                 type="submit"
-                className="w-full px-4 py-3 bg-pink-600 text-white rounded-xl hover:bg-pink-700 transition font-medium"
+                disabled={password.length !== 6}
+                className="w-full px-4 py-3 bg-pink-600 text-white rounded-xl hover:bg-pink-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {t('btn.submit') || 'Submit'}
               </button>

@@ -382,8 +382,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm divide-y divide-gray-100">
             <button
               onClick={() => {
-                showDialog('confirm', t('drawer.github_confirm'), () => {
-                  window.open('https://github.com/xzdmycbx/Oyama-s-HRT-Tracker', '_blank');
+                showDialog('confirm', t('drawer.model_confirm'), () => {
+                  window.open('https://misaka23323.com/articles/estrogen-model-summary', '_blank');
                 });
               }}
               className="w-full flex items-center gap-3 px-4 py-4 hover:bg-purple-50 transition text-left"
@@ -413,7 +413,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
             <button
               onClick={() => {
                 showDialog('confirm', t('drawer.contact_confirm'), () => {
-                  window.open('https://x.com/mycbxzd', '_blank');
+                  window.open('https://x.com/axzamyzed', '_blank');
                 });
               }}
               className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition text-left"

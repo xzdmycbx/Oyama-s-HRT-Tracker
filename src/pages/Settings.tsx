@@ -5,7 +5,7 @@ import { useDialog } from '../contexts/DialogContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Languages, Upload, Download, Copy, Trash2, Info, Github, AlertTriangle,
-  ArrowLeft, Settings as SettingsIcon, User, LogIn, UserPlus
+  ArrowLeft, Settings as SettingsIcon, User, LogIn, UserPlus, AtSign
 } from 'lucide-react';
 import CustomSelect from '../components/CustomSelect';
 import ImportModal from '../components/ImportModal';
@@ -440,7 +440,7 @@ const Settings: React.FC = () => {
             <button
               onClick={() => {
                 showDialog('confirm', t('drawer.github_confirm'), () => {
-                  window.open('https://github.com/SmirnovaOyama/Oyama-s-HRT-recorder', '_blank');
+                  window.open('https://github.com/xzdmycbx/Oyama-s-HRT-Tracker', '_blank');
                 });
               }}
               className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition text-left"
@@ -449,6 +449,21 @@ const Settings: React.FC = () => {
               <div className="text-left">
                 <p className="font-bold text-gray-900 text-sm">{t('drawer.github')}</p>
                 <p className="text-xs text-gray-500">{t('drawer.github_desc')}</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => {
+                showDialog('confirm', t('drawer.contact_confirm'), () => {
+                  window.open('https://x.com/axzamyzed', '_blank');
+                });
+              }}
+              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-gray-50 transition text-left"
+            >
+              <AtSign className="text-gray-700" size={20} />
+              <div className="text-left">
+                <p className="font-bold text-gray-900 text-sm">{t('drawer.contact')}</p>
+                <p className="text-xs text-gray-500">{t('drawer.contact_desc')}</p>
               </div>
             </button>
 
