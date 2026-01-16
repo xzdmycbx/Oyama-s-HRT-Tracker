@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCloudSync } from '../contexts/CloudSyncContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import { useDialog } from '../contexts/DialogContext';
-import { User, Smartphone, Share2, LogOut, Settings, Cloud, Camera, Trash2, Key, Lock } from 'lucide-react';
+import { User, Smartphone, Share2, LogOut, Settings, Cloud, Camera, Key, Lock } from 'lucide-react';
 import apiClient from '../api/client';
 
 const Account: React.FC = () => {
@@ -16,6 +16,7 @@ const Account: React.FC = () => {
 
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarKey, setAvatarKey] = useState(Date.now());
+  const [avatarAvailable, setAvatarAvailable] = useState(true);
 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [oldPassword, setOldPassword] = useState('');
@@ -46,8 +47,29 @@ const Account: React.FC = () => {
     await logout(clearData);
   };
 
-  const handleAvatarClick = () => {
-    fileInputRef.current?.click();
+  const handleAvatarClick = async () => {
+    if (!avatarAvailable) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    const choice = await showDialog(
+      'confirm',
+      t('account.avatarActionPrompt') || 'Choose an avatar action',
+      {
+        confirmText: t('account.uploadAvatar') || 'Upload Avatar',
+        cancelText: t('account.deleteAvatar') || 'Delete Avatar',
+        thirdOption: t('common.cancel') || 'Cancel',
+      }
+    );
+
+    if (choice === 'confirm') {
+      fileInputRef.current?.click();
+    }
+
+    if (choice === 'cancel') {
+      handleDeleteAvatar();
+    }
   };
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -74,6 +96,7 @@ const Account: React.FC = () => {
       showDialog('alert', t('account.avatarUploaded') || 'Avatar uploaded successfully');
       // Force reload avatar by updating key
       setAvatarKey(Date.now());
+      setAvatarAvailable(true);
     } else {
       showDialog('alert', response.error || 'Failed to upload avatar');
     }
@@ -84,16 +107,15 @@ const Account: React.FC = () => {
     }
   };
 
-  const handleDeleteAvatar = () => {
-    showDialog('confirm', t('account.deleteAvatarConfirm') || 'Delete your avatar?', async () => {
-      const response = await apiClient.deleteAvatar();
-      if (response.success) {
-        showDialog('alert', t('account.avatarDeleted') || 'Avatar deleted successfully');
-        setAvatarKey(Date.now());
-      } else {
-        showDialog('alert', response.error || 'Failed to delete avatar');
-      }
-    });
+  const handleDeleteAvatar = async () => {
+    const response = await apiClient.deleteAvatar();
+    if (response.success) {
+      showDialog('alert', t('account.avatarDeleted') || 'Avatar deleted successfully');
+      setAvatarKey(Date.now());
+      setAvatarAvailable(false);
+    } else {
+      showDialog('alert', response.error || 'Failed to delete avatar');
+    }
   };
 
   const handleChangePassword = async () => {
@@ -151,7 +173,13 @@ const Account: React.FC = () => {
         {/* User Info with Avatar */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
           <div className="flex items-center gap-4">
-            <div className="relative group">
+            <button
+              type="button"
+              onClick={handleAvatarClick}
+              disabled={uploadingAvatar}
+              className="relative group"
+              aria-label={t('account.avatarManage') || 'Manage avatar'}
+            >
               <div className="w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center overflow-hidden">
                 {user?.username ? (
                   <>
@@ -159,26 +187,19 @@ const Account: React.FC = () => {
                       key={avatarKey}
                       src={`${apiClient.getAvatarUrl(user.username)}?t=${avatarKey}`}
                       alt="Avatar"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // Fallback to User icon if avatar fails to load
-                        e.currentTarget.style.display = 'none';
-                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                      }}
+                      className={`w-full h-full object-cover ${avatarAvailable ? '' : 'hidden'}`}
+                      onLoad={() => setAvatarAvailable(true)}
+                      onError={() => setAvatarAvailable(false)}
                     />
-                    <User size={32} className="text-pink-600 hidden" />
+                    <User size={32} className={`text-pink-600 ${avatarAvailable ? 'hidden' : ''}`} />
                   </>
                 ) : (
                   <User size={32} className="text-pink-600" />
                 )}
               </div>
-              <button
-                onClick={handleAvatarClick}
-                disabled={uploadingAvatar}
-                className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition disabled:opacity-50"
-              >
+              <span className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-blue-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
                 <Camera size={14} />
-              </button>
+              </span>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -186,18 +207,11 @@ const Account: React.FC = () => {
                 onChange={handleAvatarChange}
                 className="hidden"
               />
-            </div>
+            </button>
             <div className="flex-1">
               <h2 className="text-xl font-bold text-gray-900">{user?.username}</h2>
               <p className="text-sm text-gray-500">{t('account.member') || 'HRT Tracker Member'}</p>
             </div>
-            <button
-              onClick={handleDeleteAvatar}
-              className="text-red-500 hover:text-red-700 transition"
-              title={t('account.deleteAvatar') || 'Delete Avatar'}
-            >
-              <Trash2 size={18} />
-            </button>
           </div>
         </div>
 
