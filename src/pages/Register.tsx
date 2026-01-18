@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -12,53 +12,90 @@ const Register: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const isMountedRef = useRef(true);
+  const hasNavigatedRef = useRef(false);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (only on initial mount)
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/account');
+    if (isAuthenticated && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      navigate('/account', { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!username || !password || !confirmPassword) {
+    // Trim inputs
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    if (!trimmedUsername || !trimmedPassword || !trimmedConfirmPassword) {
       setError(t('register.error.emptyFields') || 'Please fill in all fields');
       return;
     }
 
-    if (username.length < 3 || username.length > 20) {
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 20) {
       setError(t('register.error.invalidUsername') || 'Username must be 3-20 characters');
       return;
     }
 
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmedUsername)) {
       setError(
         t('register.error.usernameFormat') || 'Username can only contain letters, numbers, and underscores'
       );
       return;
     }
 
-    if (password.length < 6) {
-      setError(t('register.error.invalidPassword') || 'Password must be at least 6 characters');
+    if (trimmedPassword.length < 8) {
+      setError(t('register.error.invalidPassword') || 'Password must be at least 8 characters');
       return;
     }
 
-    if (password !== confirmPassword) {
+    // Check password complexity
+    const hasLetter = /[a-zA-Z]/.test(trimmedPassword);
+    const hasNumber = /[0-9]/.test(trimmedPassword);
+    if (!hasLetter || !hasNumber) {
+      setError(t('register.error.passwordComplexity') || 'Password must contain both letters and numbers');
+      return;
+    }
+
+    if (trimmedPassword !== trimmedConfirmPassword) {
       setError(t('register.error.passwordMismatch') || 'Passwords do not match');
       return;
     }
 
     setIsLoading(true);
-    const result = await register(username, password);
-    setIsLoading(false);
 
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error || t('register.error.failed') || 'Registration failed');
+    try {
+      const result = await register(trimmedUsername, trimmedPassword);
+
+      if (!isMountedRef.current) return;
+
+      if (result.success) {
+        hasNavigatedRef.current = true;
+        navigate('/', { replace: true });
+      } else {
+        // Generic error message to prevent information leakage
+        setError(t('register.error.failed') || 'Registration failed. Please try a different username.');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      if (!isMountedRef.current) return;
+      setError(t('register.error.network') || 'Network error. Please try again.');
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -101,7 +138,7 @@ const Register: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 sm:px-4 sm:py-2.5 text-sm sm:text-base border border-gray-300 rounded-lg sm:rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition"
-                placeholder={t('register.passwordPlaceholder') || 'At least 6 characters'}
+                placeholder={t('register.passwordPlaceholder') || 'At least 8 characters with letters and numbers'}
                 disabled={isLoading}
               />
             </div>

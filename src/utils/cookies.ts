@@ -1,3 +1,31 @@
+/**
+ * SECURITY NOTE:
+ *
+ * These cookies are set via JavaScript and are NOT HttpOnly.
+ * This means they can be accessed by JavaScript code, including
+ * malicious scripts injected via XSS attacks.
+ *
+ * LIMITATION: Client-side JavaScript cannot set HttpOnly cookies.
+ * Only server-side Set-Cookie headers can set HttpOnly cookies.
+ *
+ * RECOMMENDED IMPROVEMENT:
+ * For production environments, consider implementing server-side
+ * session management where:
+ * 1. Server sets HttpOnly cookies via Set-Cookie header
+ * 2. Client-side code never directly accesses tokens
+ * 3. API calls rely on HttpOnly cookies sent automatically
+ *
+ * This would provide better protection against XSS token theft.
+ *
+ * CURRENT PROTECTIONS:
+ * - SameSite=Strict: Protects against CSRF attacks
+ * - Secure flag: Only sent over HTTPS (in production)
+ * - No localStorage: Reduces XSS attack surface
+ *
+ * REMAINING RISK:
+ * - XSS attacks can still read these cookies via document.cookie
+ */
+
 export function setCookie(name: string, value: string, days: number): boolean {
   try {
     const expires = new Date();

@@ -26,13 +26,21 @@ const REFRESH_TOKEN_STORAGE_KEY = 'hrt-refresh-token';
 const USERNAME_STORAGE_KEY = 'hrt-username';
 const TOKEN_COOKIE_DAYS = 3650;
 
-const getStoredValue = (key: string) => getCookie(key) || localStorage.getItem(key);
+/**
+ * Token Storage Strategy:
+ *
+ * We store auth tokens in cookies (not localStorage) to reduce XSS attack surface.
+ * However, these are JavaScript-set cookies and NOT HttpOnly, so they can still
+ * be accessed by malicious scripts.
+ *
+ * See src/utils/cookies.ts for detailed security notes and recommendations.
+ */
+
+const getStoredValue = (key: string) => getCookie(key);
 const setStoredValue = (key: string, value: string) => {
-  localStorage.setItem(key, value);
   setCookie(key, value, TOKEN_COOKIE_DAYS);
 };
 const clearStoredValue = (key: string) => {
-  localStorage.removeItem(key);
   deleteCookie(key);
 };
 
@@ -114,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return refreshPromiseRef.current;
   }, [logout]);
 
-  // Initialize auth state from localStorage
+  // Initialize auth state from cookies
   useEffect(() => {
     const storedAccessToken = getStoredValue(TOKEN_STORAGE_KEY);
     const storedUsername = getStoredValue(USERNAME_STORAGE_KEY);

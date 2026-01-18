@@ -32,6 +32,12 @@ class ApiClient {
   private accessToken: string | null = null;
   private refreshTokenCallback: (() => Promise<boolean>) | null = null;
   private isRefreshing: boolean = false;
+  private refreshTimeoutMs: number = 10000; // 10 second timeout for token refresh
+  private requestQueue: Array<{
+    execute: () => Promise<any>;
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+  }> = [];
 
   constructor(baseUrl: string = API_BASE_URL) {
     this.baseUrl = baseUrl;
@@ -43,6 +49,113 @@ class ApiClient {
 
   setRefreshTokenCallback(callback: () => Promise<boolean>) {
     this.refreshTokenCallback = callback;
+  }
+
+  /**
+   * Execute token refresh with timeout protection
+   * Prevents refresh from hanging indefinitely
+   */
+  private async executeRefreshWithTimeout(): Promise<boolean> {
+    if (!this.refreshTokenCallback) {
+      throw new Error('Refresh token callback not set');
+    }
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<boolean>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('Token refresh timed out'));
+      }, this.refreshTimeoutMs);
+    });
+
+    try {
+      // Race between refresh and timeout
+      const result = await Promise.race([
+        this.refreshTokenCallback(),
+        timeoutPromise,
+      ]);
+
+      // Clear timeout on success
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      return result;
+    } catch (error) {
+      // Clear timeout on error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      if (error instanceof Error && error.message === 'Token refresh timed out') {
+        console.error('Token refresh exceeded timeout of', this.refreshTimeoutMs, 'ms');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Unified token refresh and queue processing handler
+   * Handles refresh logic and queued requests in a consistent way
+   * Used by both request() and uploadAvatar()
+   */
+  private async handleTokenRefreshAndQueue(): Promise<boolean> {
+    try {
+      const refreshed = await this.executeRefreshWithTimeout();
+
+      if (refreshed) {
+        // Process queued requests
+        const queue = [...this.requestQueue];
+        this.requestQueue = [];
+
+        // Process all queued requests asynchronously
+        // Note: Always resolve (never reject) to maintain consistency with direct API calls
+        queue.forEach((queuedRequest) => {
+          queuedRequest.execute()
+            .then(queuedRequest.resolve)
+            .catch((error) => {
+              // Convert exception to ApiResponse format for consistency
+              queuedRequest.resolve({
+                success: false,
+                error: error instanceof Error ? error.message : 'Request failed',
+              });
+            });
+        });
+
+        return true;
+      } else {
+        // Refresh failed, resolve all queued requests with error
+        const queue = [...this.requestQueue];
+        this.requestQueue = [];
+
+        const authError: ApiResponse<any> = {
+          success: false,
+          error: 'Authentication failed',
+          status: 401,
+        };
+
+        queue.forEach((queuedRequest) => {
+          queuedRequest.resolve(authError);
+        });
+
+        return false;
+      }
+    } catch (error) {
+      // Handle refresh callback exception
+      const queue = [...this.requestQueue];
+      this.requestQueue = [];
+
+      const refreshError: ApiResponse<any> = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Token refresh failed',
+        status: 500,
+      };
+
+      queue.forEach((queuedRequest) => {
+        queuedRequest.resolve(refreshError);
+      });
+
+      throw error;
+    }
   }
 
   private async request<T>(
@@ -57,10 +170,10 @@ class ApiClient {
       ...options.headers,
     };
 
-    // Public endpoints that don't need Authorization
+    // Public endpoints that don't need Authorization (exact match)
     const publicEndpoints = ['/auth/login', '/auth/register', '/auth/refresh', '/health'];
     const isShareView = !!endpoint.match(/^\/shares\/[^/]+\/view$/);
-    const needsAuth = !publicEndpoints.some(ep => endpoint.startsWith(ep)) && !isShareView;
+    const needsAuth = !publicEndpoints.includes(endpoint) && !isShareView;
 
     if (this.accessToken && needsAuth) {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
@@ -91,16 +204,46 @@ class ApiClient {
         // Handle 401 Unauthorized - try to refresh token once
         if (response.status === 401 &&
             this.refreshTokenCallback &&
-            !this.isRefreshing &&
             needsAuth &&
             !hasRetried) {
-          this.isRefreshing = true;
-          const refreshed = await this.refreshTokenCallback();
-          this.isRefreshing = false;
 
-          if (refreshed) {
-            // Retry the request with new token
-            return this.request<T>(endpoint, options, timeout, true);
+          // If already refreshing, queue this request
+          if (this.isRefreshing) {
+            return new Promise((resolve, reject) => {
+              this.requestQueue.push({
+                execute: () => this.request<T>(endpoint, options, timeout, true),
+                resolve,
+                reject,
+              });
+            });
+          }
+
+          // Start refresh process
+          this.isRefreshing = true;
+
+          try {
+            const refreshed = await this.handleTokenRefreshAndQueue();
+
+            if (refreshed) {
+              // Retry the original request with new token
+              return await this.request<T>(endpoint, options, timeout, true);
+            } else {
+              // Refresh failed
+              return {
+                success: false,
+                error: 'Authentication failed',
+                status: 401,
+              } as ApiResponse<T>;
+            }
+          } catch (error) {
+            // Handle refresh exception
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Token refresh failed',
+              status: 500,
+            } as ApiResponse<T>;
+          } finally {
+            this.isRefreshing = false;
           }
         }
 
@@ -252,7 +395,7 @@ class ApiClient {
   }
 
   // Avatar APIs
-  async uploadAvatar(file: File): Promise<ApiResponse<UploadAvatarResponse>> {
+  async uploadAvatar(file: File, timeout: number = 30000, hasRetried: boolean = false): Promise<ApiResponse<UploadAvatarResponse>> {
     const formData = new FormData();
     formData.append('avatar', file);
 
@@ -263,12 +406,18 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     try {
       const response = await fetch(url, {
         method: 'POST',
         headers,
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       let data: any;
       const text = await response.text();
@@ -279,15 +428,65 @@ class ApiClient {
       }
 
       if (!response.ok) {
+        // Handle 401 Unauthorized - try to refresh token once
+        if (response.status === 401 && this.refreshTokenCallback && !hasRetried) {
+          // If already refreshing, queue this request
+          if (this.isRefreshing) {
+            return new Promise((resolve, reject) => {
+              this.requestQueue.push({
+                execute: () => this.uploadAvatar(file, timeout, true),
+                resolve,
+                reject,
+              });
+            });
+          }
+
+          // Start refresh process
+          this.isRefreshing = true;
+
+          try {
+            const refreshed = await this.handleTokenRefreshAndQueue();
+
+            if (refreshed) {
+              // Retry the upload with new token
+              return await this.uploadAvatar(file, timeout, true);
+            } else {
+              // Refresh failed
+              return {
+                success: false,
+                error: 'Authentication failed',
+                status: 401,
+              };
+            }
+          } catch (error) {
+            // Handle refresh exception
+            return {
+              success: false,
+              error: error instanceof Error ? error.message : 'Token refresh failed',
+              status: 500,
+            };
+          } finally {
+            this.isRefreshing = false;
+          }
+        }
+
         return {
           success: false,
           error: data.error || `HTTP ${response.status}`,
+          status: response.status,
         };
       }
 
       return data;
     } catch (error) {
+      clearTimeout(timeoutId);
       if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          return {
+            success: false,
+            error: 'Upload timeout',
+          };
+        }
         return {
           success: false,
           error: error.message,
@@ -307,7 +506,9 @@ class ApiClient {
   }
 
   getAvatarUrl(username: string): string {
-    return `${this.baseUrl}/avatars/${username}`;
+    // Encode username to prevent URL injection
+    const encodedUsername = encodeURIComponent(username);
+    return `${this.baseUrl}/avatars/${encodedUsername}`;
   }
 
   // Password Management APIs

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
@@ -11,41 +11,69 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const isMountedRef = useRef(true);
+  const hasNavigatedRef = useRef(false);
 
-  // Redirect if already logged in
+  // Redirect if already logged in (only on initial mount)
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/account');
+    if (isAuthenticated && !hasNavigatedRef.current) {
+      hasNavigatedRef.current = true;
+      navigate('/account', { replace: true });
     }
   }, [isAuthenticated, navigate]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (!username || !password) {
+    // Trim inputs
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedUsername || !trimmedPassword) {
       setError(t('login.error.emptyFields') || 'Please fill in all fields');
       return;
     }
 
-    if (username.length < 3 || username.length > 20) {
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 20) {
       setError(t('login.error.invalidUsername') || 'Username must be 3-20 characters');
       return;
     }
 
-    if (password.length < 6) {
-      setError(t('login.error.invalidPassword') || 'Password must be at least 6 characters');
+    if (trimmedPassword.length < 8) {
+      setError(t('login.error.invalidPassword') || 'Password must be at least 8 characters');
       return;
     }
 
     setIsLoading(true);
-    const result = await login(username, password);
-    setIsLoading(false);
 
-    if (result.success) {
-      navigate('/');
-    } else {
-      setError(result.error || t('login.error.failed') || 'Login failed');
+    try {
+      const result = await login(trimmedUsername, trimmedPassword);
+
+      if (!isMountedRef.current) return;
+
+      if (result.success) {
+        hasNavigatedRef.current = true;
+        navigate('/', { replace: true });
+      } else {
+        // Generic error message to prevent user enumeration
+        setError(t('login.error.failed') || 'Invalid username or password');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      if (!isMountedRef.current) return;
+      setError(t('login.error.network') || 'Network error. Please try again.');
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

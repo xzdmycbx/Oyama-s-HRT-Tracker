@@ -4,18 +4,22 @@
 import { deleteCookie, getCookie, setCookie } from './cookies';
 
 const SECURITY_PASSWORD_COOKIE = 'hrt-security-pwd';
-const SECURITY_PASSWORD_STORAGE_KEY = 'hrt-security-pwd';
-const SALT = 'hrt-tracker-security-salt-v1'; // 固定salt
+const SALT_PREFIX = 'hrt-tracker-security-v2-'; // 用于生成用户特定salt
 const SECURITY_PASSWORD_COOKIE_DAYS = 3650;
 
 /**
  * 从用户名派生加密密钥
+ * 使用用户名作为salt的一部分，确保每个用户有不同的密钥派生
  */
 async function deriveKey(username: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
+
+  // 使用用户名生成唯一的salt
+  const userSalt = SALT_PREFIX + username;
+
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(username + SALT),
+    encoder.encode(username + userSalt),
     'PBKDF2',
     false,
     ['deriveKey']
@@ -24,7 +28,7 @@ async function deriveKey(username: string): Promise<CryptoKey> {
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: encoder.encode(SALT),
+      salt: encoder.encode(userSalt),
       iterations: 100000,
       hash: 'SHA-256',
     },
@@ -103,7 +107,6 @@ export async function saveSecurityPassword(password: string, username: string): 
   try {
     const encrypted = await encryptPassword(password, username);
     const saved = setCookie(SECURITY_PASSWORD_COOKIE, encrypted, SECURITY_PASSWORD_COOKIE_DAYS);
-    localStorage.setItem(SECURITY_PASSWORD_STORAGE_KEY, encrypted);
 
     if (saved) {
       console.log('Security password saved to cookie successfully');
@@ -123,8 +126,7 @@ export async function saveSecurityPassword(password: string, username: string): 
  */
 export async function getSecurityPassword(username: string): Promise<string | null> {
   try {
-    const encrypted = getCookie(SECURITY_PASSWORD_COOKIE) ||
-      localStorage.getItem(SECURITY_PASSWORD_STORAGE_KEY);
+    const encrypted = getCookie(SECURITY_PASSWORD_COOKIE);
     if (!encrypted) return null;
 
     return await decryptPassword(encrypted, username);
@@ -139,6 +141,5 @@ export async function getSecurityPassword(username: string): Promise<string | nu
  * @returns true if deleted successfully, false otherwise
  */
 export async function clearSecurityPassword(): Promise<boolean> {
-  localStorage.removeItem(SECURITY_PASSWORD_STORAGE_KEY);
   return deleteCookie(SECURITY_PASSWORD_COOKIE);
 }
