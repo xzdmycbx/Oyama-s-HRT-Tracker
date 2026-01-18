@@ -17,11 +17,13 @@ export interface AuthTokens {
 export interface LoginRequest {
   username: string;
   password: string;
+  turnstile_token?: string;
 }
 
 export interface RegisterRequest {
   username: string;
   password: string;
+  turnstile_token?: string;
 }
 
 export interface RefreshTokenRequest {

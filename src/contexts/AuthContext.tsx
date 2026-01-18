@@ -13,8 +13,8 @@ interface AuthContextType {
   accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (username: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (username: string, password: string, turnstileToken?: string) => Promise<{ success: boolean; error?: string }>;
+  register: (username: string, password: string, turnstileToken?: string) => Promise<{ success: boolean; error?: string }>;
   logout: (clearLocalData?: boolean) => Promise<void>;
   refreshAccessToken: () => Promise<boolean>;
 }
@@ -155,8 +155,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken]);
 
-  const login = async (username: string, password: string) => {
-    const response = await apiClient.login({ username, password });
+  const login = async (username: string, password: string, turnstileToken?: string) => {
+    const response = await apiClient.login({
+      username,
+      password,
+      turnstile_token: turnstileToken
+    });
 
     if (response.success && response.data) {
       const { access_token, refresh_token } = response.data;
@@ -175,8 +179,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: false, error: response.error || 'Login failed' };
   };
 
-  const register = async (username: string, password: string) => {
-    const response = await apiClient.register({ username, password });
+  const register = async (username: string, password: string, turnstileToken?: string) => {
+    const response = await apiClient.register({
+      username,
+      password,
+      turnstile_token: turnstileToken
+    });
 
     if (response.success && response.data) {
       const { access_token, refresh_token } = response.data;

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
+import Turnstile from '../components/Turnstile';
+import { TURNSTILE_SITE_KEY } from '../api/config';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -12,6 +14,8 @@ const Register: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const isMountedRef = useRef(true);
   const hasNavigatedRef = useRef(false);
 
@@ -32,6 +36,10 @@ const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent concurrent submissions
+    if (isLoading) return;
+
     setError('');
 
     // Trim inputs
@@ -74,10 +82,16 @@ const Register: React.FC = () => {
       return;
     }
 
+    // Check Turnstile token if site key is configured
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setError(t('register.error.captcha') || 'Please complete the verification');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const result = await register(trimmedUsername, trimmedPassword);
+      const result = await register(trimmedUsername, trimmedPassword, turnstileToken || undefined);
 
       if (!isMountedRef.current) return;
 
@@ -87,11 +101,21 @@ const Register: React.FC = () => {
       } else {
         // Generic error message to prevent information leakage
         setError(t('register.error.failed') || 'Registration failed. Please try a different username.');
+        // Reset Turnstile on error
+        if (TURNSTILE_SITE_KEY) {
+          setTurnstileToken('');
+          setTurnstileKey(prev => prev + 1);
+        }
       }
     } catch (error) {
       console.error('Registration error:', error);
       if (!isMountedRef.current) return;
       setError(t('register.error.network') || 'Network error. Please try again.');
+      // Reset Turnstile on error
+      if (TURNSTILE_SITE_KEY) {
+        setTurnstileToken('');
+        setTurnstileKey(prev => prev + 1);
+      }
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
@@ -157,6 +181,24 @@ const Register: React.FC = () => {
                 disabled={isLoading}
               />
             </div>
+
+            {TURNSTILE_SITE_KEY && (
+              <Turnstile
+                key={turnstileKey}
+                onSuccess={(token) => {
+                  setTurnstileToken(token);
+                  setError(''); // Clear any previous captcha errors
+                }}
+                onError={() => {
+                  setTurnstileToken('');
+                  setError(t('register.error.captchaFailed') || 'Verification failed. Please try again.');
+                }}
+                onExpired={() => {
+                  setTurnstileToken('');
+                  setError(t('register.error.captchaExpired') || 'Verification expired. Please verify again.');
+                }}
+              />
+            )}
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm">
