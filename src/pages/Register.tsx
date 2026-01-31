@@ -185,6 +185,7 @@ const Register: React.FC = () => {
             {TURNSTILE_SITE_KEY && (
               <Turnstile
                 key={turnstileKey}
+                action="register"
                 onSuccess={(token) => {
                   setTurnstileToken(token);
                   setError(''); // Clear any previous captcha errors
