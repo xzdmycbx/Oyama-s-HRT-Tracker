@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
-import Turnstile from '../components/Turnstile';
-import { TURNSTILE_SITE_KEY } from '../api/config';
+import TurnstileModal from '../components/TurnstileModal';
+import { Shield } from 'lucide-react';
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -15,7 +15,8 @@ const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
-  const [turnstileKey, setTurnstileKey] = useState(0);
+  const [showTurnstileModal, setShowTurnstileModal] = useState(false);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const isMountedRef = useRef(true);
   const hasNavigatedRef = useRef(false);
 
@@ -82,16 +83,29 @@ const Register: React.FC = () => {
       return;
     }
 
-    // Check Turnstile token if site key is configured
-    if (TURNSTILE_SITE_KEY && !turnstileToken) {
-      setError(t('register.error.captcha') || 'Please complete the verification');
+    // Check if we need Turnstile verification
+    // Try to get site key from multiple sources
+    const runtimeEnv = (globalThis as any).__ENV__;
+    const hasSiteKey = !!(
+      runtimeEnv?.VITE_TURNSTILE_SITE_KEY ||
+      (globalThis as any).VITE_TURNSTILE_SITE_KEY ||
+      import.meta.env.VITE_TURNSTILE_SITE_KEY
+    );
+
+    if (hasSiteKey && !turnstileToken) {
+      setNeedsVerification(true);
+      setShowTurnstileModal(true);
       return;
     }
 
+    await performRegister(trimmedUsername, trimmedPassword);
+  };
+
+  const performRegister = async (username: string, password: string) => {
     setIsLoading(true);
 
     try {
-      const result = await register(trimmedUsername, trimmedPassword, turnstileToken || undefined);
+      const result = await register(username, password, turnstileToken || undefined);
 
       if (!isMountedRef.current) return;
 
@@ -102,25 +116,38 @@ const Register: React.FC = () => {
         // Generic error message to prevent information leakage
         setError(t('register.error.failed') || 'Registration failed. Please try a different username.');
         // Reset Turnstile on error
-        if (TURNSTILE_SITE_KEY) {
-          setTurnstileToken('');
-          setTurnstileKey(prev => prev + 1);
-        }
+        setTurnstileToken('');
+        setNeedsVerification(false);
       }
     } catch (error) {
       console.error('Registration error:', error);
       if (!isMountedRef.current) return;
       setError(t('register.error.network') || 'Network error. Please try again.');
       // Reset Turnstile on error
-      if (TURNSTILE_SITE_KEY) {
-        setTurnstileToken('');
-        setTurnstileKey(prev => prev + 1);
-      }
+      setTurnstileToken('');
+      setNeedsVerification(false);
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
       }
     }
+  };
+
+  const handleTurnstileSuccess = (token: string) => {
+    console.log('[Register] Turnstile success, token received');
+    setTurnstileToken(token);
+    setShowTurnstileModal(false);
+    setNeedsVerification(true);
+    // Auto-submit after verification
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    performRegister(trimmedUsername, trimmedPassword);
+  };
+
+  const handleTurnstileError = () => {
+    console.error('[Register] Turnstile error');
+    setError(t('register.error.captchaFailed') || 'Verification failed. Please try again.');
+    setShowTurnstileModal(false);
   };
 
   return (
@@ -182,23 +209,11 @@ const Register: React.FC = () => {
               />
             </div>
 
-            {TURNSTILE_SITE_KEY && (
-              <Turnstile
-                key={turnstileKey}
-                action="register"
-                onSuccess={(token) => {
-                  setTurnstileToken(token);
-                  setError(''); // Clear any previous captcha errors
-                }}
-                onError={() => {
-                  setTurnstileToken('');
-                  setError(t('register.error.captchaFailed') || 'Verification failed. Please try again.');
-                }}
-                onExpired={() => {
-                  setTurnstileToken('');
-                  setError(t('register.error.captchaExpired') || 'Verification expired. Please verify again.');
-                }}
-              />
+            {turnstileToken && (
+              <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-sm flex items-center gap-2">
+                <Shield size={16} />
+                <span>Verification completed</span>
+              </div>
             )}
 
             {error && (
@@ -231,6 +246,16 @@ const Register: React.FC = () => {
             </Link>
           </div>
         </div>
+
+        <TurnstileModal
+          isOpen={showTurnstileModal}
+          onClose={() => setShowTurnstileModal(false)}
+          onSuccess={handleTurnstileSuccess}
+          onError={handleTurnstileError}
+          action="register"
+          title={t('register.verification') || 'Security Verification'}
+          description={t('register.verificationDesc') || 'Please complete the verification to create account'}
+        />
       </div>
     </div>
   );

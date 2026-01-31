@@ -15,8 +15,6 @@ const buildRuntimeEnvScript = (env: Env) => {
   return `<script>window.__ENV__=${JSON.stringify(runtimeEnv)};</script>`;
 };
 
-const TURNSTILE_SCRIPT = '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>';
-
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     // 这里可以处理 API 请求
@@ -39,9 +37,8 @@ export default {
     return new HTMLRewriter()
       .on('head', {
         element(element) {
-          // Inject Turnstile script first
-          element.append(TURNSTILE_SCRIPT, { html: true });
-          // Then inject runtime environment variables
+          // Inject runtime environment variables
+          // Note: Turnstile script is loaded on-demand by TurnstileModal component
           element.append(runtimeEnvScript, { html: true });
         }
       })
