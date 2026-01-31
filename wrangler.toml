@@ -8,3 +8,7 @@ directory = "./dist"
 [observability]
 enabled = true
 head_sampling_rate = 1
+
+[vars]
+VITE_TURNSTILE_SITE_KEY = "0x4AAAAAACNK04dmEz0g0aG7"
+VITE_API_BASE_URL = "https://hrt-service.transmtf.com/api"
