@@ -148,6 +148,7 @@ const Login: React.FC = () => {
             {TURNSTILE_SITE_KEY && (
               <Turnstile
                 key={turnstileKey}
+                action="login"
                 onSuccess={(token) => {
                   setTurnstileToken(token);
                   setError(''); // Clear any previous captcha errors

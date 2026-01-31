@@ -7,6 +7,8 @@ declare global {
     turnstile?: {
       render: (element: string | HTMLElement, options: {
         sitekey: string;
+        action?: string;
+        cData?: string;
         callback?: (token: string) => void;
         'error-callback'?: () => void;
         'expired-callback'?: () => void;
@@ -21,9 +23,11 @@ interface TurnstileProps {
   onSuccess: (token: string) => void;
   onError?: () => void;
   onExpired?: () => void;
+  action?: string;
+  cData?: string;
 }
 
-const Turnstile: React.FC<TurnstileProps> = ({ onSuccess, onError, onExpired }) => {
+const Turnstile: React.FC<TurnstileProps> = ({ onSuccess, onError, onExpired, action, cData }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
@@ -54,20 +58,23 @@ const Turnstile: React.FC<TurnstileProps> = ({ onSuccess, onError, onExpired }) 
         try {
           widgetIdRef.current = window.turnstile.render(containerRef.current, {
             sitekey: TURNSTILE_SITE_KEY,
+            action,
+            cData,
             callback: (token: string) => {
               onSuccessRef.current(token);
             },
             'error-callback': () => {
               onErrorRef.current?.();
+              if (widgetIdRef.current && window.turnstile) {
+                window.turnstile.reset(widgetIdRef.current);
+              }
             },
             'expired-callback': () => {
               if (onExpiredRef.current) {
                 onExpiredRef.current();
-              } else {
-                // Auto-reset on expiration if no custom handler
-                if (widgetIdRef.current && window.turnstile) {
-                  window.turnstile.reset(widgetIdRef.current);
-                }
+              }
+              if (widgetIdRef.current && window.turnstile) {
+                window.turnstile.reset(widgetIdRef.current);
               }
             },
           });
