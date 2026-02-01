@@ -5,7 +5,7 @@ import { useDialog } from '../contexts/DialogContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Languages, Upload, Download, Copy, Trash2, Info, Github, AlertTriangle,
-  ArrowLeft, Settings as SettingsIcon, User, LogIn, UserPlus, AtSign
+  ArrowLeft, Settings as SettingsIcon, User, LogIn, UserPlus, AtSign, BarChart2
 } from 'lucide-react';
 import CustomSelect from '../components/CustomSelect';
 import ImportModal from '../components/ImportModal';
@@ -13,6 +13,7 @@ import ExportModal from '../components/ExportModal';
 import PasswordDisplayModal from '../components/PasswordDisplayModal';
 import PasswordInputModal from '../components/PasswordInputModal';
 import DisclaimerModal from '../components/DisclaimerModal';
+import StatisticsModal from '../components/StatisticsModal';
 import { encryptData, decryptData, DoseEvent, LabResult } from '../../logic';
 import { computeDataHash } from '../utils/dataHash';
 import { APP_VERSION } from '../constants';
@@ -50,6 +51,7 @@ const Settings: React.FC = () => {
   const [isPasswordDisplayOpen, setIsPasswordDisplayOpen] = useState(false);
   const [isPasswordInputOpen, setIsPasswordInputOpen] = useState(false);
   const [isDisclaimerOpen, setIsDisclaimerOpen] = useState(false);
+  const [isStatisticsOpen, setIsStatisticsOpen] = useState(false);
   const [pendingImportText, setPendingImportText] = useState<string | null>(null);
 
   const languageOptions = useMemo(() => ([
@@ -468,6 +470,17 @@ const Settings: React.FC = () => {
             </button>
 
             <button
+              onClick={() => setIsStatisticsOpen(true)}
+              className="w-full flex items-center gap-3 px-4 py-4 hover:bg-blue-50 transition text-left"
+            >
+              <BarChart2 className="text-blue-500" size={20} />
+              <div className="text-left">
+                <p className="font-bold text-gray-900 text-sm">{t('statistics.title')}</p>
+                <p className="text-xs text-gray-500">{t('statistics.desc')}</p>
+              </div>
+            </button>
+
+            <button
               onClick={() => setIsDisclaimerOpen(true)}
               className="w-full flex items-center gap-3 px-4 py-4 hover:bg-amber-50 transition text-left"
             >
@@ -517,6 +530,11 @@ const Settings: React.FC = () => {
       <DisclaimerModal
         isOpen={isDisclaimerOpen}
         onClose={() => setIsDisclaimerOpen(false)}
+      />
+
+      <StatisticsModal
+        isOpen={isStatisticsOpen}
+        onClose={() => setIsStatisticsOpen(false)}
       />
     </div>
   );

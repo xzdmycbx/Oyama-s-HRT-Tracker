@@ -23,6 +23,7 @@ import type {
   UploadAvatarResponse,
   ChangePasswordRequest,
   ChangePasswordResponse,
+  StatisticsResponse,
 } from './types';
 
 import { API_BASE_URL } from './config';
@@ -171,7 +172,7 @@ class ApiClient {
     };
 
     // Public endpoints that don't need Authorization (exact match)
-    const publicEndpoints = ['/auth/login', '/auth/register', '/auth/refresh', '/health'];
+    const publicEndpoints = ['/auth/login', '/auth/register', '/auth/refresh', '/health', '/statistics'];
     const isShareView = !!endpoint.match(/^\/shares\/[^/]+\/view$/);
     const needsAuth = !publicEndpoints.includes(endpoint) && !isShareView;
 
@@ -522,6 +523,11 @@ class ApiClient {
   // Health Check
   async healthCheck(): Promise<ApiResponse<{ status: string }>> {
     return this.request<{ status: string }>('/health');
+  }
+
+  // Statistics API
+  async getStatistics(): Promise<ApiResponse<StatisticsResponse>> {
+    return this.request<StatisticsResponse>('/statistics');
   }
 }
 

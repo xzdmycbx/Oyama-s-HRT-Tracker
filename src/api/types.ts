@@ -142,3 +142,11 @@ export interface ChangePasswordResponse {
   message: string;
   other_sessions_logged_out: number;
 }
+
+// Statistics Types
+export interface StatisticsResponse {
+  total_users: number;
+  syncs_last_7_days: number;
+  database_size: string;
+  last_updated: string;
+}

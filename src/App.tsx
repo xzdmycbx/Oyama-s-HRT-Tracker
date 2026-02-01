@@ -41,7 +41,7 @@ const App = () => (
                         <Route index element={<OverviewPage />} />
                         <Route path="history" element={<HistoryPage />} />
                         <Route path="lab" element={<LabPage />} />
-                        <Route path="settings" element={<SettingsPage />} />
+                        <Route path="settings" element={<AccountSettings />} />
 
                         {/* Auth pages */}
                         <Route path="login" element={<Login />} />
