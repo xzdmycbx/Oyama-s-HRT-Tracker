@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTranslation } from '../contexts/LanguageContext';
 import TurnstileModal from '../components/TurnstileModal';
+import { TURNSTILE_SITE_KEY } from '../api/config';
 import { Shield } from 'lucide-react';
 
 const Register: React.FC = () => {
@@ -16,7 +17,6 @@ const Register: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState('');
   const [showTurnstileModal, setShowTurnstileModal] = useState(false);
-  const [needsVerification, setNeedsVerification] = useState(false);
   const isMountedRef = useRef(true);
   const hasNavigatedRef = useRef(false);
 
@@ -84,20 +84,19 @@ const Register: React.FC = () => {
     }
 
     // Check if we need Turnstile verification
-    // Try to get site key from multiple sources
-    const runtimeEnv = (globalThis as any).__ENV__;
-    const hasSiteKey = !!(
-      runtimeEnv?.VITE_TURNSTILE_SITE_KEY ||
-      (globalThis as any).VITE_TURNSTILE_SITE_KEY ||
-      import.meta.env.VITE_TURNSTILE_SITE_KEY
-    );
+    if (import.meta.env.DEV) {
+      console.log('[Register] Checking Turnstile requirement...');
+      console.log('[Register] TURNSTILE_SITE_KEY:', TURNSTILE_SITE_KEY ? 'Available' : 'Missing');
+      console.log('[Register] turnstileToken:', turnstileToken ? 'Has token' : 'No token');
+    }
 
-    if (hasSiteKey && !turnstileToken) {
-      setNeedsVerification(true);
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      if (import.meta.env.DEV) console.log('[Register] Opening Turnstile modal');
       setShowTurnstileModal(true);
       return;
     }
 
+    if (import.meta.env.DEV) console.log('[Register] Proceeding to register');
     await performRegister(trimmedUsername, trimmedPassword);
   };
 
@@ -134,10 +133,9 @@ const Register: React.FC = () => {
   };
 
   const handleTurnstileSuccess = (token: string) => {
-    console.log('[Register] Turnstile success, token received');
+    if (import.meta.env.DEV) console.log('[Register] Turnstile success, token received');
     setTurnstileToken(token);
     setShowTurnstileModal(false);
-    setNeedsVerification(true);
     // Auto-submit after verification
     const trimmedUsername = username.trim();
     const trimmedPassword = password.trim();
@@ -145,7 +143,7 @@ const Register: React.FC = () => {
   };
 
   const handleTurnstileError = () => {
-    console.error('[Register] Turnstile error');
+    if (import.meta.env.DEV) console.error('[Register] Turnstile error');
     setError(t('register.error.captchaFailed') || 'Verification failed. Please try again.');
     setShowTurnstileModal(false);
   };

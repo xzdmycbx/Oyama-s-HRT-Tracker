@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { TURNSTILE_SITE_KEY } from '../api/config';
 
 // Declare Turnstile types for the global window object
 declare global {
@@ -49,18 +50,14 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
     onErrorRef.current = onError;
   }, [onSuccess, onError]);
 
-  // Get site key from runtime environment
+  // Get site key from centralized config
   const getSiteKey = (): string => {
-    // Try multiple sources in priority order
-    const runtimeEnv = (globalThis as any).__ENV__;
-    const siteKey =
-      runtimeEnv?.VITE_TURNSTILE_SITE_KEY ||
-      (globalThis as any).VITE_TURNSTILE_SITE_KEY ||
-      import.meta.env.VITE_TURNSTILE_SITE_KEY ||
-      '';
+    const siteKey = TURNSTILE_SITE_KEY || '';
 
-    console.log('[TurnstileModal] Site key:', siteKey ? 'Found' : 'Not found');
-    console.log('[TurnstileModal] window.__ENV__:', runtimeEnv);
+    if (import.meta.env.DEV) {
+      console.log('[TurnstileModal] Site key from config:', siteKey ? 'Found' : 'Not found');
+      console.log('[TurnstileModal] window.__ENV__:', (globalThis as any).__ENV__);
+    }
 
     return siteKey;
   };
@@ -99,14 +96,14 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
     const loadTurnstileScript = () => {
       return new Promise<void>((resolve, reject) => {
         if (window.turnstile) {
-          console.log('[TurnstileModal] Turnstile already loaded');
+          if (import.meta.env.DEV) console.log('[TurnstileModal] Turnstile already loaded');
           resolve();
           return;
         }
 
         const existingScript = document.querySelector('script[src*="challenges.cloudflare.com/turnstile"]');
         if (existingScript) {
-          console.log('[TurnstileModal] Turnstile script already in DOM, waiting...');
+          if (import.meta.env.DEV) console.log('[TurnstileModal] Turnstile script already in DOM, waiting...');
           const checkInterval = setInterval(() => {
             if (window.turnstile) {
               clearInterval(checkInterval);
@@ -122,13 +119,13 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
           return;
         }
 
-        console.log('[TurnstileModal] Loading Turnstile script...');
+        if (import.meta.env.DEV) console.log('[TurnstileModal] Loading Turnstile script...');
         const script = document.createElement('script');
         script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
         script.async = true;
         script.defer = true;
         script.onload = () => {
-          console.log('[TurnstileModal] Turnstile script loaded');
+          if (import.meta.env.DEV) console.log('[TurnstileModal] Turnstile script loaded');
           // Wait a bit for the API to initialize
           setTimeout(() => {
             if (window.turnstile) {
@@ -162,12 +159,12 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
           return;
         }
 
-        console.log('[TurnstileModal] Rendering Turnstile widget...');
+        if (import.meta.env.DEV) console.log('[TurnstileModal] Rendering Turnstile widget...');
         widgetIdRef.current = window.turnstile!.render(containerRef.current, {
           sitekey: siteKey,
           action,
           callback: (token: string) => {
-            console.log('[TurnstileModal] Verification successful');
+            if (import.meta.env.DEV) console.log('[TurnstileModal] Verification successful');
             onSuccessRef.current(token);
           },
           'error-callback': () => {
@@ -178,14 +175,14 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
             }
           },
           'expired-callback': () => {
-            console.warn('[TurnstileModal] Verification expired');
+            if (import.meta.env.DEV) console.warn('[TurnstileModal] Verification expired');
             onErrorRef.current?.();
             if (widgetIdRef.current && window.turnstile) {
               window.turnstile.reset(widgetIdRef.current);
             }
           },
         });
-        console.log('[TurnstileModal] Widget rendered with ID:', widgetIdRef.current);
+        if (import.meta.env.DEV) console.log('[TurnstileModal] Widget rendered with ID:', widgetIdRef.current);
       } catch (error) {
         console.error('[TurnstileModal] Failed to render:', error);
         onErrorRef.current?.();
@@ -197,7 +194,7 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
     return () => {
       if (widgetIdRef.current && window.turnstile) {
         try {
-          console.log('[TurnstileModal] Removing widget:', widgetIdRef.current);
+          if (import.meta.env.DEV) console.log('[TurnstileModal] Removing widget:', widgetIdRef.current);
           window.turnstile.remove(widgetIdRef.current);
         } catch (error) {
           console.error('[TurnstileModal] Failed to remove widget:', error);
@@ -207,7 +204,11 @@ const TurnstileModal: React.FC<TurnstileModalProps> = ({
     };
   }, [isOpen, action]);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    return null;
+  }
+
+  if (import.meta.env.DEV) console.log('[TurnstileModal] Rendering modal - isOpen:', isOpen);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 animate-in fade-in">
