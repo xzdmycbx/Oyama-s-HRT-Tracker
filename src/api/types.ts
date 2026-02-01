@@ -146,7 +146,7 @@ export interface ChangePasswordResponse {
 // Statistics Types
 export interface StatisticsResponse {
   total_users: number;
-  syncs_last_7_days: number;
-  database_size: string;
-  last_updated: string;
+  data_syncs_last_7days: number;
+  database_size_mb: number;
+  last_updated_at: string;
 }

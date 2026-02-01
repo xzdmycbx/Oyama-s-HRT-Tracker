@@ -30,7 +30,12 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({ isOpen, onClose }) =>
       const response = await apiClient.getStatistics();
       console.log('[StatisticsModal] Response:', response);
 
-      if (response.success && response.data) {
+      // Check if response has the expected fields (direct data or wrapped in ApiResponse)
+      if (response.total_users !== undefined) {
+        // Direct response format
+        setStats(response as any);
+      } else if (response.success && response.data) {
+        // Wrapped ApiResponse format
         setStats(response.data);
       } else {
         setError(response.error || t('statistics.error.load_failed'));
@@ -49,6 +54,16 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({ isOpen, onClose }) =>
       return date.toLocaleString();
     } catch {
       return dateString;
+    }
+  };
+
+  const formatDatabaseSize = (sizeMB: number) => {
+    if (sizeMB < 1) {
+      return `${(sizeMB * 1024).toFixed(2)} KB`;
+    } else if (sizeMB < 1024) {
+      return `${sizeMB.toFixed(2)} MB`;
+    } else {
+      return `${(sizeMB / 1024).toFixed(2)} GB`;
     }
   };
 
@@ -102,7 +117,7 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({ isOpen, onClose }) =>
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-600">{t('statistics.syncs_last_7_days')}</p>
-                <p className="text-lg font-bold text-gray-900">{stats.syncs_last_7_days.toLocaleString()}</p>
+                <p className="text-lg font-bold text-gray-900">{stats.data_syncs_last_7days.toLocaleString()}</p>
               </div>
             </div>
 
@@ -112,7 +127,7 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({ isOpen, onClose }) =>
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-600">{t('statistics.database_size')}</p>
-                <p className="text-lg font-bold text-gray-900">{stats.database_size}</p>
+                <p className="text-lg font-bold text-gray-900">{formatDatabaseSize(stats.database_size_mb)}</p>
               </div>
             </div>
 
@@ -122,7 +137,7 @@ const StatisticsModal: React.FC<StatisticsModalProps> = ({ isOpen, onClose }) =>
               </div>
               <div className="flex-1">
                 <p className="text-xs text-gray-600">{t('statistics.last_updated')}</p>
-                <p className="text-sm font-bold text-gray-900">{formatDate(stats.last_updated)}</p>
+                <p className="text-sm font-bold text-gray-900">{formatDate(stats.last_updated_at)}</p>
               </div>
             </div>
           </div>
