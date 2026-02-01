@@ -100,11 +100,11 @@ const Register: React.FC = () => {
     await performRegister(trimmedUsername, trimmedPassword);
   };
 
-  const performRegister = async (username: string, password: string) => {
+  const performRegister = async (username: string, password: string, token?: string) => {
     setIsLoading(true);
 
     try {
-      const result = await register(username, password, turnstileToken || undefined);
+      const result = await register(username, password, token || turnstileToken || undefined);
 
       if (!isMountedRef.current) return;
 
@@ -116,7 +116,6 @@ const Register: React.FC = () => {
         setError(t('register.error.failed') || 'Registration failed. Please try a different username.');
         // Reset Turnstile on error
         setTurnstileToken('');
-        setNeedsVerification(false);
       }
     } catch (error) {
       console.error('Registration error:', error);
@@ -124,7 +123,6 @@ const Register: React.FC = () => {
       setError(t('register.error.network') || 'Network error. Please try again.');
       // Reset Turnstile on error
       setTurnstileToken('');
-      setNeedsVerification(false);
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
@@ -136,10 +134,10 @@ const Register: React.FC = () => {
     if (import.meta.env.DEV) console.log('[Register] Turnstile success, token received');
     setTurnstileToken(token);
     setShowTurnstileModal(false);
-    // Auto-submit after verification
+    // Auto-submit after verification with the token
     const trimmedUsername = username.trim();
     const trimmedPassword = password.trim();
-    performRegister(trimmedUsername, trimmedPassword);
+    performRegister(trimmedUsername, trimmedPassword, token);
   };
 
   const handleTurnstileError = () => {

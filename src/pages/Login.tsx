@@ -78,11 +78,11 @@ const Login: React.FC = () => {
     await performLogin(trimmedUsername, trimmedPassword);
   };
 
-  const performLogin = async (username: string, password: string) => {
+  const performLogin = async (username: string, password: string, token?: string) => {
     setIsLoading(true);
 
     try {
-      const result = await login(username, password, turnstileToken || undefined);
+      const result = await login(username, password, token || turnstileToken || undefined);
 
       if (!isMountedRef.current) return;
 
@@ -94,7 +94,6 @@ const Login: React.FC = () => {
         setError(t('login.error.failed') || 'Invalid username or password');
         // Reset Turnstile on error
         setTurnstileToken('');
-        setNeedsVerification(false);
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -102,7 +101,6 @@ const Login: React.FC = () => {
       setError(t('login.error.network') || 'Network error. Please try again.');
       // Reset Turnstile on error
       setTurnstileToken('');
-      setNeedsVerification(false);
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
@@ -114,10 +112,10 @@ const Login: React.FC = () => {
     if (import.meta.env.DEV) console.log('[Login] Turnstile success, token received');
     setTurnstileToken(token);
     setShowTurnstileModal(false);
-    // Auto-submit after verification
+    // Auto-submit after verification with the token
     const trimmedUsername = username.trim();
     const trimmedPassword = password.trim();
-    performLogin(trimmedUsername, trimmedPassword);
+    performLogin(trimmedUsername, trimmedPassword, token);
   };
 
   const handleTurnstileError = () => {
