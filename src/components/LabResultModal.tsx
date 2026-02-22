@@ -22,17 +22,25 @@ const LabResultModal = ({ isOpen, onClose, onSave, onDelete, resultToEdit }: Lab
 
     useEffect(() => {
         if (isOpen) {
+            const toLocalDate = (d: Date) => {
+                const pad = (n: number) => n.toString().padStart(2, '0');
+                return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+            };
+            const toLocalTime = (d: Date) => {
+                const pad = (n: number) => n.toString().padStart(2, '0');
+                return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+            };
+
             if (resultToEdit) {
                 const d = new Date(resultToEdit.timeH * 3600000);
-                setDate(d.toISOString().split('T')[0]);
-                setTime(d.toTimeString().slice(0, 5));
+                setDate(toLocalDate(d));
+                setTime(toLocalTime(d));
                 setValue(resultToEdit.concValue.toString());
                 setUnit(resultToEdit.unit);
-                // Note is not in LabResult yet, maybe add it? For now ignore.
             } else {
                 const now = new Date();
-                setDate(now.toISOString().split('T')[0]);
-                setTime(now.toTimeString().slice(0, 5));
+                setDate(toLocalDate(now));
+                setTime(toLocalTime(now));
                 setValue("");
                 setUnit('pmol/l');
                 setNote("");

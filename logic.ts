@@ -589,6 +589,484 @@ export function interpolateConcentration_CPA(sim: SimulationResult, hour: number
     return c0 + (c1 - c0) * ratio;
 }
 
+// --- Personal PK Learning System (EKF / MAP-Bayesian) ---
+//
+// Implements a 2-parameter Extended Kalman Filter (EKF) that learns individual
+// PK parameters from lab calibration points.
+//
+// State vector theta = [theta_s, theta_k]:
+//   theta_s → amplitude scale  s = exp(theta_s)   (adjusts Vd / systemic exposure)
+//   theta_k → clearance scale k = exp(theta_k)   (adjusts kClear & kClearInjection)
+//
+// Prediction in log-space: yhat(t) = log(s * C_pk(t, k)) = theta_s + log(C_pk(t,k))
+// This makes the gradient ∂yhat/∂theta_s = 1 analytically, reducing finite-diff calls.
+
+export interface ResidualAnchor {
+    timeH: number;
+    logRatio: number; // log(observed_pgml) - log(predicted_with_theta_pgml)
+    w: number;        // confidence weight [0, 1]
+    kind: 'lab';
+}
+
+export interface PersonalModelState {
+    modelVersion: 'pk-ekf-v1';
+    thetaMean: [number, number];                       // [theta_s, theta_k]
+    thetaCov: [[number, number], [number, number]];    // 2×2 posterior covariance
+    Q: [[number, number], [number, number]];           // process noise (slow drift)
+    Rlog: number;                                      // measurement noise (log-space)
+    anchors: ResidualAnchor[];
+    observationCount: number;
+    updatedAt: string;                                 // ISO-8601
+}
+
+export interface EKFDiagnostics {
+    NIS: number;              // Normalized Innovation Squared (chi-sq test stat)
+    isOutlier: boolean;       // NIS > chi2 at 95% (1 DOF) → flag this observation
+    residualLog: number;      // y - yhat in log-space (positive = obs > pred)
+    predictedPGmL: number;   // E2 prediction before update
+    observedPGmL: number;    // E2 observation
+    ci95Low: number;          // 95% CI lower bound (pg/mL) at observation time
+    ci95High: number;         // 95% CI upper bound (pg/mL) at observation time
+    convergenceScore: number; // 0 = no convergence, 1 = fully converged
+    thetaS: number;           // exp(theta_s): current amplitude multiplier
+    thetaK: number;           // exp(theta_k): current clearance scale
+}
+
+// Default prior parameters (see paper: sigma_s=0.5, sigma_k=0.3, sigma_y≈0.2)
+const EKF_INITIAL_COV: [[number, number], [number, number]] = [[0.25, 0.0], [0.0, 0.09]];
+const EKF_Q: [[number, number], [number, number]] = [[0.0004, 0.0], [0.0, 0.0001]];
+const EKF_RLOG = 0.04;                    // (0.2 log-space SD)²
+const EKF_EPS = 0.1;                      // concentration floor (pg/mL)
+const EKF_EPS_CPA = 0.001;                // concentration floor for CPA (ng/mL)
+const EKF_CHI2_95 = 3.841;               // chi-squared 95th percentile, 1 DOF
+const EKF_DELTA_K = 0.01;                // finite-difference step for theta_k
+const EKF_CI_MAX_E2 = 5000;               // chart safety cap (pg/mL)
+const EKF_CI_MAX_CPA = 500;               // chart safety cap (ng/mL)
+
+/** Initialise a new personal model state at the population prior. */
+export function initPersonalModel(): PersonalModelState {
+    return {
+        modelVersion: 'pk-ekf-v1',
+        thetaMean: [0, 0],
+        thetaCov: EKF_INITIAL_COV,
+        Q: EKF_Q,
+        Rlog: EKF_RLOG,
+        anchors: [],
+        observationCount: 0,
+        updatedAt: new Date().toISOString(),
+    };
+}
+
+/**
+ * Compute E2 amount contributed by one event at time tau after the event,
+ * using a scaled clearance rate (kScale = exp(theta_k)).
+ * Only E2-family compounds are evaluated; CPA events return 0.
+ */
+function computeEventAmountWithKScale(
+    event: DoseEvent,
+    allEvents: DoseEvent[],
+    tau: number,
+    kScale: number
+): number {
+    if (tau < 0) return 0;
+    if (event.route === Route.patchRemove) return 0;
+    if (event.ester === Ester.CPA) return 0;
+
+    const params = resolveParams(event);
+    const k3 = params.k3 * kScale; // scale the elimination rate
+
+    switch (event.route) {
+        case Route.injection: {
+            const doseFast = event.doseMG * params.Frac_fast;
+            const doseSlow = event.doseMG * (1.0 - params.Frac_fast);
+            return _analytic3C(tau, doseFast, params.F, params.k1_fast, params.k2, k3) +
+                   _analytic3C(tau, doseSlow, params.F, params.k1_slow, params.k2, k3);
+        }
+        case Route.gel:
+        case Route.oral: {
+            const paramsK = { ...params, k3 };
+            return oneCompAmount(tau, event.doseMG, paramsK);
+        }
+        case Route.sublingual: {
+            const doseF = event.doseMG * params.Frac_fast;
+            const doseS = event.doseMG * (1.0 - params.Frac_fast);
+            if (params.k2 > 0) {
+                // EV sublingual (3-compartment each branch)
+                return _analytic3C(tau, doseF, params.F_fast, params.k1_fast, params.k2, k3) +
+                       _analytic3C(tau, doseS, params.F_slow, params.k1_slow, params.k2, k3);
+            } else {
+                // E2 sublingual (1-compartment dual branch)
+                const branch = (d: number, F: number, ka: number, ke: number, t: number): number => {
+                    if (Math.abs(ka - ke) < 1e-9) return d * F * ka * t * Math.exp(-ke * t);
+                    return d * F * ka / (ka - ke) * (Math.exp(-ke * t) - Math.exp(-ka * t));
+                };
+                return branch(doseF, params.F_fast, params.k1_fast, k3, tau) +
+                       branch(doseS, params.F_slow, params.k1_slow, k3, tau);
+            }
+        }
+        case Route.patchApply: {
+            const remove = allEvents.find(e => e.route === Route.patchRemove && e.timeH > event.timeH);
+            const wearH = (remove?.timeH ?? Number.MAX_VALUE) - event.timeH;
+            if (params.rateMGh > 0) {
+                if (tau <= wearH) {
+                    return params.rateMGh / k3 * (1 - Math.exp(-k3 * tau));
+                } else {
+                    const amtAtRemoval = params.rateMGh / k3 * (1 - Math.exp(-k3 * wearH));
+                    return amtAtRemoval * Math.exp(-k3 * (tau - wearH));
+                }
+            }
+            const paramsK = { ...params, k3 };
+            const amtUnder = oneCompAmount(tau, event.doseMG, paramsK);
+            if (tau > wearH) {
+                const amtAtRemoval = oneCompAmount(wearH, event.doseMG, paramsK);
+                return amtAtRemoval * Math.exp(-k3 * (tau - wearH));
+            }
+            return amtUnder;
+        }
+        default:
+            return 0;
+    }
+}
+
+/**
+ * Compute CPA oral amount at time tau after an oral CPA dose event,
+ * using a scaled clearance rate (kScale = exp(theta_k)).
+ */
+function computeCPAEventAmountWithKScale(
+    event: DoseEvent,
+    tau: number,
+    kScale: number
+): number {
+    if (tau < 0) return 0;
+    if (event.ester !== Ester.CPA) return 0;
+    // CPA oral 1-compartment: k1=1.0 h⁻¹, k3=0.017 h⁻¹, F=0.7
+    const k1 = 1.0;
+    const k3 = 0.017 * kScale;
+    const F = 0.7;
+    if (Math.abs(k1 - k3) < 1e-9) {
+        return event.doseMG * F * k1 * tau * Math.exp(-k3 * tau);
+    }
+    return event.doseMG * F * k1 / (k1 - k3) * (Math.exp(-k3 * tau) - Math.exp(-k1 * tau));
+}
+
+/**
+ * Compute CPA plasma concentration (ng/mL) at a single time point,
+ * applying individual EKF-learned parameters theta = [theta_s, theta_k].
+ * theta_s scales bioavailability; theta_k scales clearance.
+ */
+export function computeCPAAtTimeWithTheta(
+    events: DoseEvent[],
+    weight: number,
+    timeH: number,
+    theta: [number, number]
+): number {
+    const s = Math.exp(theta[0]);
+    const kScale = Math.exp(theta[1]);
+    const sorted = [...events].sort((a, b) => a.timeH - b.timeH);
+    let totalMG = 0;
+    for (const ev of sorted) {
+        if (ev.timeH > timeH) continue;
+        totalMG += computeCPAEventAmountWithKScale(ev, timeH - ev.timeH, kScale);
+    }
+    const plasmaVolML = CorePK.vdPerKG_CPA * weight * 1000;
+    return Math.max(0, (totalMG * 1e6) / plasmaVolML * s); // ng/mL
+}
+
+/**
+ * Compute E2 plasma concentration (pg/mL) at a single time point,
+ * applying individual parameters theta = [theta_s, theta_k].
+ *
+ * C(t; θ) = exp(θ_s) × C_pk(t, exp(θ_k))
+ */
+export function computeE2AtTimeWithTheta(
+    events: DoseEvent[],
+    weight: number,
+    timeH: number,
+    theta: [number, number]
+): number {
+    const s = Math.exp(theta[0]);
+    const kScale = Math.exp(theta[1]);
+    const sorted = [...events].sort((a, b) => a.timeH - b.timeH);
+
+    let totalMG = 0;
+    for (const ev of sorted) {
+        if (ev.timeH > timeH) continue;
+        totalMG += computeEventAmountWithKScale(ev, sorted, timeH - ev.timeH, kScale);
+    }
+
+    const plasmaVolML = CorePK.vdPerKG * weight * 1000;
+    return Math.max(0, (totalMG * 1e9) / plasmaVolML * s);
+}
+
+/**
+ * EKF update: incorporate one new lab result into the personal model.
+ * Returns the updated state and diagnostics for that observation.
+ */
+export function ekfUpdatePersonalModel(
+    events: DoseEvent[],
+    weight: number,
+    state: PersonalModelState,
+    labResult: LabResult
+): { newState: PersonalModelState; diagnostics: EKFDiagnostics } {
+    // --- Observation ---
+    const obsPGmL = convertToPgMl(labResult.concValue, labResult.unit);
+    const y = Math.log(Math.max(obsPGmL, EKF_EPS));
+
+    // --- Prediction step (parameter random walk) ---
+    const theta = state.thetaMean.slice() as [number, number];
+    const P: [[number, number], [number, number]] = [
+        [state.thetaCov[0][0] + state.Q[0][0], state.thetaCov[0][1] + state.Q[0][1]],
+        [state.thetaCov[1][0] + state.Q[1][0], state.thetaCov[1][1] + state.Q[1][1]],
+    ];
+
+    // --- Predicted observation ---
+    const predPGmL = computeE2AtTimeWithTheta(events, weight, labResult.timeH, theta);
+    const yhat = Math.log(Math.max(predPGmL, EKF_EPS));
+
+    // --- Jacobian H = [∂yhat/∂theta_s, ∂yhat/∂theta_k] ---
+    // ∂yhat/∂theta_s = 1 (exact, since yhat = theta_s + log(C_pk))
+    const thetaKPerturbed: [number, number] = [theta[0], theta[1] + EKF_DELTA_K];
+    const predPerturbed = computeE2AtTimeWithTheta(events, weight, labResult.timeH, thetaKPerturbed);
+    const yhatPerturbed = Math.log(Math.max(predPerturbed, EKF_EPS));
+    const H: [number, number] = [1.0, (yhatPerturbed - yhat) / EKF_DELTA_K];
+
+    // --- Innovation ---
+    const nu = y - yhat;
+
+    // --- Innovation covariance S = H P H^T + R ---
+    const S = H[0]*H[0]*P[0][0] + 2*H[0]*H[1]*P[0][1] + H[1]*H[1]*P[1][1] + state.Rlog;
+
+    // --- Outlier detection (Normalised Innovation Squared) ---
+    const NIS = (S > 0) ? (nu * nu / S) : 0;
+    const isOutlier = NIS > EKF_CHI2_95;
+
+    // --- Inflate R if outlier (robust update) ---
+    const Reff = isOutlier ? state.Rlog * 4.0 : state.Rlog;
+    const Seff = H[0]*H[0]*P[0][0] + 2*H[0]*H[1]*P[0][1] + H[1]*H[1]*P[1][1] + Reff;
+
+    // --- Kalman gain K = P H^T / Seff ---
+    const K: [number, number] = [
+        (P[0][0]*H[0] + P[0][1]*H[1]) / Seff,
+        (P[1][0]*H[0] + P[1][1]*H[1]) / Seff,
+    ];
+
+    // --- Update theta ---
+    const thetaNew: [number, number] = [theta[0] + K[0] * nu, theta[1] + K[1] * nu];
+
+    // --- Update covariance  P_new = (I - K H) P ---
+    const i00 = 1 - K[0]*H[0];
+    const i01 = -K[0]*H[1];
+    const i10 = -K[1]*H[0];
+    const i11 = 1 - K[1]*H[1];
+    const PNew: [[number, number], [number, number]] = [
+        [i00*P[0][0] + i01*P[1][0], i00*P[0][1] + i01*P[1][1]],
+        [i10*P[0][0] + i11*P[1][0], i10*P[0][1] + i11*P[1][1]],
+    ];
+    // Enforce symmetry and positive lower bounds
+    PNew[0][1] = PNew[1][0] = (PNew[0][1] + PNew[1][0]) / 2;
+    PNew[0][0] = Math.max(PNew[0][0], 1e-6);
+    PNew[1][1] = Math.max(PNew[1][1], 1e-6);
+
+    // --- Residual anchor (log-space residual after update) ---
+    const newPredPGmL = computeE2AtTimeWithTheta(events, weight, labResult.timeH, thetaNew);
+    const logRatioPost = Math.log(Math.max(obsPGmL, EKF_EPS)) - Math.log(Math.max(newPredPGmL, EKF_EPS));
+    const anchor: ResidualAnchor = {
+        timeH: labResult.timeH,
+        logRatio: logRatioPost,
+        w: isOutlier ? 0.3 : 1.0,
+        kind: 'lab',
+    };
+    const updatedAnchors = [...state.anchors, anchor]
+        .sort((a, b) => a.timeH - b.timeH)
+        .slice(-20); // keep most recent 20
+
+    // --- 95% CI at observation time ---
+    const hK = H[1];
+    const varYhat = PNew[0][0] + 2*PNew[0][1]*hK + PNew[1][1]*hK*hK;
+    const std95 = Math.sqrt(Math.max(0, varYhat + Reff));
+    const logPredNew = Math.log(Math.max(newPredPGmL, EKF_EPS));
+    const ci95Low = Math.exp(logPredNew - 1.96 * std95);
+    const ci95High = Math.exp(logPredNew + 1.96 * std95);
+
+    // --- Convergence score (how much uncertainty has been reduced) ---
+    const initialTrace = EKF_INITIAL_COV[0][0] + EKF_INITIAL_COV[1][1];
+    const currentTrace = PNew[0][0] + PNew[1][1];
+    const convergenceScore = Math.max(0, Math.min(1, 1 - currentTrace / initialTrace));
+
+    const newState: PersonalModelState = {
+        modelVersion: 'pk-ekf-v1',
+        thetaMean: thetaNew,
+        thetaCov: PNew,
+        Q: state.Q,
+        Rlog: state.Rlog,
+        anchors: updatedAnchors,
+        observationCount: state.observationCount + 1,
+        updatedAt: new Date().toISOString(),
+    };
+
+    const diagnostics: EKFDiagnostics = {
+        NIS,
+        isOutlier,
+        residualLog: nu,
+        predictedPGmL: predPGmL,
+        observedPGmL: obsPGmL,
+        ci95Low,
+        ci95High,
+        convergenceScore,
+        thetaS: Math.exp(thetaNew[0]),
+        thetaK: Math.exp(thetaNew[1]),
+    };
+
+    return { newState, diagnostics };
+}
+
+/**
+ * Replay all lab results from prior state to rebuild the personal model.
+ * Call this when events are edited/deleted or lab results are changed.
+ */
+export function replayPersonalModel(
+    events: DoseEvent[],
+    weight: number,
+    labResults: LabResult[]
+): PersonalModelState {
+    let state = initPersonalModel();
+    const sorted = [...labResults].sort((a, b) => a.timeH - b.timeH);
+    for (const lab of sorted) {
+        const { newState } = ekfUpdatePersonalModel(events, weight, state, lab);
+        state = newState;
+    }
+    return state;
+}
+
+/**
+ * Compute a full simulation curve adjusted by the personal model theta,
+ * plus 95% confidence interval bands.
+ *
+ * Returns arrays aligned with sim.timeH:
+ *   - e2Adjusted: E2 prediction from learned parameters (pg/mL)
+ *   - ci95Low / ci95High: lower/upper 95% CI bounds (pg/mL)
+ */
+export function computeSimulationWithCI(
+    sim: SimulationResult,
+    events: DoseEvent[],
+    weight: number,
+    state: PersonalModelState,
+    applyE2LearningToCPA: boolean = true
+): {
+    timeH: number[];
+    e2Adjusted: number[];
+    ci95Low: number[];
+    ci95High: number[];
+    cpaAdjusted: number[];
+    cpaCi95Low: number[];
+    cpaCi95High: number[];
+} {
+    const n = sim.timeH.length;
+    const theta = state.thetaMean;
+    const P = state.thetaCov;
+
+    const clampCI = (low: number, high: number, hardMax: number): [number, number] => {
+        const lo = Number.isFinite(low) ? Math.max(0, low) : 0;
+        const hi = Number.isFinite(high) ? Math.max(lo, high) : lo;
+        const loC = Math.min(lo, hardMax);
+        const hiC = Math.min(hi, hardMax);
+        return [Math.min(loC, hiC), hiC];
+    };
+
+    // Sample at ~100 representative time points, then interpolate
+    const step = Math.max(1, Math.floor(n / 100));
+    const sampledIndices: number[] = [];
+    for (let i = 0; i < n; i += step) sampledIndices.push(i);
+    if (sampledIndices[sampledIndices.length - 1] !== n - 1) sampledIndices.push(n - 1);
+
+    const sampledResults: {
+        idx: number;
+        e2Adj: number;
+        ci95Low: number;
+        ci95High: number;
+        cpaAdj: number;
+        cpaCi95Low: number;
+        cpaCi95High: number;
+    }[] = [];
+
+    for (const idx of sampledIndices) {
+        const timeH = sim.timeH[idx];
+        const pred = computeE2AtTimeWithTheta(events, weight, timeH, theta);
+
+        // Finite-difference gradient ∂yhat/∂theta_k
+        const predK = computeE2AtTimeWithTheta(events, weight, timeH,
+            [theta[0], theta[1] + EKF_DELTA_K]);
+        const yhat = Math.log(Math.max(pred, EKF_EPS));
+        const yhatK = Math.log(Math.max(predK, EKF_EPS));
+        const hK = (yhatK - yhat) / EKF_DELTA_K;
+
+        // Parameter uncertainty: H = [1, hK]
+        const varYhat = P[0][0] + 2*P[0][1]*hK + P[1][1]*hK*hK;
+        const totalVar = varYhat + state.Rlog;
+        const std = Math.sqrt(Math.max(0, totalVar));
+
+        const e2CiRawLow = Math.exp(yhat - 1.96 * std);
+        const e2CiRawHigh = Math.exp(yhat + 1.96 * std);
+        const [e2CiLow, e2CiHigh] = clampCI(e2CiRawLow, e2CiRawHigh, EKF_CI_MAX_E2);
+
+        const cpaPred = applyE2LearningToCPA
+            ? computeCPAAtTimeWithTheta(events, weight, timeH, theta)
+            : 0;
+
+        let cpaCiLow = 0;
+        let cpaCiHigh = 0;
+        if (applyE2LearningToCPA) {
+            const cpaPredK = computeCPAAtTimeWithTheta(events, weight, timeH, [theta[0], theta[1] + EKF_DELTA_K]);
+            const yhatCPA = Math.log(Math.max(cpaPred, EKF_EPS_CPA));
+            const yhatCPAK = Math.log(Math.max(cpaPredK, EKF_EPS_CPA));
+            const hKCPA = (yhatCPAK - yhatCPA) / EKF_DELTA_K;
+            const varYhatCPA = P[0][0] + 2 * P[0][1] * hKCPA + P[1][1] * hKCPA * hKCPA;
+            const totalVarCPA = varYhatCPA + state.Rlog;
+            const stdCPA = Math.sqrt(Math.max(0, totalVarCPA));
+            const cpaCiRawLow = Math.exp(yhatCPA - 1.96 * stdCPA);
+            const cpaCiRawHigh = Math.exp(yhatCPA + 1.96 * stdCPA);
+            [cpaCiLow, cpaCiHigh] = clampCI(cpaCiRawLow, cpaCiRawHigh, EKF_CI_MAX_CPA);
+        }
+
+        sampledResults.push({
+            idx,
+            e2Adj: pred,
+            ci95Low: e2CiLow,
+            ci95High: e2CiHigh,
+            cpaAdj: cpaPred,
+            cpaCi95Low: cpaCiLow,
+            cpaCi95High: cpaCiHigh,
+        });
+    }
+
+    // Linear interpolation across all n points
+    const e2Adjusted = new Array<number>(n).fill(0);
+    const ci95Low = new Array<number>(n).fill(0);
+    const ci95High = new Array<number>(n).fill(0);
+    const cpaAdjusted = applyE2LearningToCPA ? new Array<number>(n).fill(0) : [];
+    const cpaCi95Low = applyE2LearningToCPA ? new Array<number>(n).fill(0) : [];
+    const cpaCi95High = applyE2LearningToCPA ? new Array<number>(n).fill(0) : [];
+
+    for (let j = 0; j < sampledResults.length; j++) {
+        const a = sampledResults[j];
+        const b = sampledResults[j + 1] ?? a;
+        const span = b.idx - a.idx;
+        for (let i = a.idx; i <= b.idx; i++) {
+            const frac = span > 0 ? (i - a.idx) / span : 0;
+            e2Adjusted[i] = a.e2Adj + (b.e2Adj - a.e2Adj) * frac;
+            ci95Low[i] = a.ci95Low + (b.ci95Low - a.ci95Low) * frac;
+            ci95High[i] = a.ci95High + (b.ci95High - a.ci95High) * frac;
+            if (applyE2LearningToCPA) {
+                cpaAdjusted[i] = a.cpaAdj + (b.cpaAdj - a.cpaAdj) * frac;
+                cpaCi95Low[i] = a.cpaCi95Low + (b.cpaCi95Low - a.cpaCi95Low) * frac;
+                cpaCi95High[i] = a.cpaCi95High + (b.cpaCi95High - a.cpaCi95High) * frac;
+            }
+        }
+    }
+
+    return { timeH: sim.timeH, e2Adjusted, ci95Low, ci95High, cpaAdjusted, cpaCi95Low, cpaCi95High };
+}
+
 // --- Encryption Utils ---
 
 async function generateKey(password: string, salt: Uint8Array) {

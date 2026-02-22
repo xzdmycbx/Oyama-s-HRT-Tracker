@@ -1,7 +1,25 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { DoseEvent, LabResult, SimulationResult, runSimulation, createCalibrationInterpolator } from '../../logic';
+import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useRef, useCallback } from 'react';
+import {
+    DoseEvent, LabResult, SimulationResult,
+    PersonalModelState, EKFDiagnostics,
+    runSimulation, createCalibrationInterpolator,
+    replayPersonalModel, computeSimulationWithCI, initPersonalModel,
+    ekfUpdatePersonalModel,
+} from '../../logic';
 import { computeDataHash } from '../utils/dataHash';
+
+const PERSONAL_MODEL_KEY = 'hrt-personal-model';
+const APPLY_E2_LEARNING_TO_CPA_KEY = 'hrt-apply-e2-learning-to-cpa';
+
+interface SimCI {
+    timeH: number[];
+    e2Adjusted: number[];
+    ci95Low: number[];
+    ci95High: number[];
+    cpaAdjusted: number[];
+    cpaCi95Low: number[];
+    cpaCi95High: number[];
+}
 
 interface AppDataContextType {
     events: DoseEvent[];
@@ -13,9 +31,47 @@ interface AppDataContextType {
     simulation: SimulationResult | null;
     calibrationFn: (h: number) => number;
     currentTime: Date;
+    personalModel: PersonalModelState | null;
+    simCI: SimCI | null;
+    lastDiagnostics: EKFDiagnostics | null;
+    applyE2LearningToCPA: boolean;
+    setApplyE2LearningToCPA: React.Dispatch<React.SetStateAction<boolean>>;
+    resetPersonalModel: () => void;
 }
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
+
+function loadPersonalModel(): PersonalModelState | null {
+    try {
+        const raw = localStorage.getItem(PERSONAL_MODEL_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        // Validate shape AND value ranges before trusting stored data.
+        // Theta values outside ±4 (log-space) indicate a corrupted/stale model;
+        // reject and let the replay effect recompute from lab results.
+        if (
+            parsed?.modelVersion === 'pk-ekf-v1' &&
+            Array.isArray(parsed.thetaMean) && parsed.thetaMean.length === 2 &&
+            typeof parsed.thetaMean[0] === 'number' && Math.abs(parsed.thetaMean[0]) <= 4 &&
+            typeof parsed.thetaMean[1] === 'number' && Math.abs(parsed.thetaMean[1]) <= 4 &&
+            Array.isArray(parsed.thetaCov) && parsed.thetaCov.length === 2 &&
+            typeof parsed.Rlog === 'number' &&
+            typeof parsed.observationCount === 'number' &&
+            Array.isArray(parsed.anchors)
+        ) {
+            return parsed as PersonalModelState;
+        }
+    } catch { /* ignore */ }
+    return null;
+}
+
+function savePersonalModel(state: PersonalModelState | null) {
+    if (state) {
+        localStorage.setItem(PERSONAL_MODEL_KEY, JSON.stringify(state));
+    } else {
+        localStorage.removeItem(PERSONAL_MODEL_KEY);
+    }
+}
 
 export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const [events, setEvents] = useState<DoseEvent[]>(() => {
@@ -35,6 +91,14 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
     const [simulation, setSimulation] = useState<SimulationResult | null>(null);
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [personalModel, setPersonalModel] = useState<PersonalModelState | null>(loadPersonalModel);
+    const [simCI, setSimCI] = useState<SimCI | null>(null);
+    const [lastDiagnostics, setLastDiagnostics] = useState<EKFDiagnostics | null>(null);
+    const [applyE2LearningToCPA, setApplyE2LearningToCPA] = useState<boolean>(() => {
+        const raw = localStorage.getItem(APPLY_E2_LEARNING_TO_CPA_KEY);
+        if (raw === null) return false;
+        return raw === '1' || raw.toLowerCase() === 'true';
+    });
 
     const suppressLocalUpdateRef = useRef({
         events: false,
@@ -81,6 +145,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         localStorage.setItem('hrt-lab-results', value);
         finalizeLocalUpdate('labResults', 'hrt-lab-results');
     }, [labResults]);
+    useEffect(() => {
+        localStorage.setItem(APPLY_E2_LEARNING_TO_CPA_KEY, applyE2LearningToCPA ? '1' : '0');
+    }, [applyE2LearningToCPA]);
 
     useEffect(() => {
         const lang = localStorage.getItem('hrt-lang') || 'en';
@@ -142,10 +209,56 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
     }, [events, weight]);
 
-    // Create calibration function
+    // Rebuild personal model whenever events, weight, or labResults change
+    useEffect(() => {
+        if (labResults.length === 0) {
+            setPersonalModel(null);
+            setLastDiagnostics(null);
+            setSimCI(null);
+            savePersonalModel(null);
+            return;
+        }
+
+        // Replay EKF from the prior using all sorted lab results
+        const newModel = replayPersonalModel(events, weight, labResults);
+
+        // Derive last diagnostics from the most recent lab point
+        const sorted = [...labResults].sort((a, b) => a.timeH - b.timeH);
+        const lastLab = sorted[sorted.length - 1];
+
+        // Build prior state (n-1 replayed) to get the update diagnostics
+        const priorModel = labResults.length > 1
+            ? replayPersonalModel(events, weight, sorted.slice(0, -1))
+            : initPersonalModel();
+
+        const { diagnostics } = ekfUpdatePersonalModel(events, weight, priorModel, lastLab);
+        setLastDiagnostics(diagnostics);
+
+        setPersonalModel(newModel);
+        savePersonalModel(newModel);
+    }, [events, weight, labResults]);
+
+    // Recompute CI bands whenever simulation or personal model changes
+    useEffect(() => {
+        if (!simulation || !personalModel || personalModel.observationCount === 0) {
+            setSimCI(null);
+            return;
+        }
+        const ci = computeSimulationWithCI(simulation, events, weight, personalModel, applyE2LearningToCPA);
+        setSimCI(ci);
+    }, [simulation, personalModel, events, weight, applyE2LearningToCPA]);
+
+    // Create calibration function (legacy ratio-based, still used for current-scale display)
     const calibrationFn = useMemo(() => {
         return createCalibrationInterpolator(simulation, labResults);
     }, [simulation, labResults]);
+
+    const resetPersonalModel = useCallback(() => {
+        setPersonalModel(null);
+        setLastDiagnostics(null);
+        setSimCI(null);
+        savePersonalModel(null);
+    }, []);
 
     const value = {
         events,
@@ -157,6 +270,12 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         simulation,
         calibrationFn,
         currentTime,
+        personalModel,
+        simCI,
+        lastDiagnostics,
+        applyE2LearningToCPA,
+        setApplyE2LearningToCPA,
+        resetPersonalModel,
     };
 
     return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;

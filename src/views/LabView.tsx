@@ -1,22 +1,201 @@
-import React from 'react';
-import { FlaskConical, Plus, Eye } from 'lucide-react';
+import React, { useState } from 'react';
+import { FlaskConical, Plus, Brain, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTranslation } from '../contexts/LanguageContext';
 import { formatDate, formatTime } from '../utils/helpers';
-import { LabResult } from '../../logic';
+import { LabResult, PersonalModelState, EKFDiagnostics } from '../../logic';
 
 interface LabViewProps {
   labResults: LabResult[];
-  currentTime: Date;
-  calibrationFn: (h: number) => number;
+  personalModel: PersonalModelState | null;
+  lastDiagnostics: EKFDiagnostics | null;
+  applyE2LearningToCPA: boolean;
+  onSetApplyE2LearningToCPA: (enabled: boolean) => void;
   onAddLabResult: () => void;
   onEditLabResult: (result: LabResult) => void;
   onClearLabResults: () => void;
 }
 
+// Compact progress bar for convergence score
+const ConvergenceBar: React.FC<{ score: number }> = ({ score }) => {
+  const pct = Math.round(score * 100);
+  const color =
+    score < 0.2 ? 'bg-gray-300' :
+    score < 0.5 ? 'bg-amber-400' :
+    score < 0.75 ? 'bg-emerald-400' :
+    'bg-emerald-600';
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-[10px] font-bold text-gray-500 w-8 text-right">{pct}%</span>
+    </div>
+  );
+};
+
+// One row in the learning panel
+const StatRow: React.FC<{ label: string; value: React.ReactNode; hint?: string }> = ({ label, value, hint }) => (
+  <div className="flex items-start justify-between gap-2 py-1.5 border-b border-gray-50 last:border-0">
+    <div className="min-w-0">
+      <span className="text-[11px] font-semibold text-gray-500">{label}</span>
+      {hint && <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">{hint}</p>}
+    </div>
+    <div className="text-[11px] font-bold text-gray-800 shrink-0">{value}</div>
+  </div>
+);
+
+const LearningPanel: React.FC<{
+  personalModel: PersonalModelState | null;
+  lastDiagnostics: EKFDiagnostics | null;
+}> = ({ personalModel, lastDiagnostics }) => {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+
+  const hasModel = personalModel !== null && personalModel.observationCount > 0;
+  const conv = lastDiagnostics?.convergenceScore ?? 0;
+
+  const convLabel =
+    conv < 0.15 ? t('lab.learning_conv_none') :
+    conv < 0.6  ? t('lab.learning_conv_partial') :
+    t('lab.learning_conv_good');
+
+  const ampFactor = lastDiagnostics?.thetaS ?? (hasModel ? Math.exp(personalModel!.thetaMean[0]) : null);
+  const clrFactor = lastDiagnostics?.thetaK ?? (hasModel ? Math.exp(personalModel!.thetaMean[1]) : null);
+
+  return (
+    <div className="mx-4 bg-white rounded-2xl border border-rose-100 shadow-sm overflow-hidden">
+      {/* Header – always visible */}
+      <button
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-rose-50/30 transition-colors"
+        onClick={() => setExpanded(v => !v)}
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center">
+            <Brain size={15} className="text-rose-400" />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-bold text-gray-800">{t('lab.learning_title')}</p>
+            {hasModel ? (
+              <p className="text-[10px] text-gray-400">
+                {personalModel!.observationCount} {t('lab.learning_obs')}
+                {lastDiagnostics?.isOutlier && (
+                  <span className="ml-2 text-amber-500 font-semibold">⚠</span>
+                )}
+              </p>
+            ) : (
+              <p className="text-[10px] text-gray-400">{t('lab.learning_conv_none')}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {hasModel && (
+            <div className="w-20">
+              <ConvergenceBar score={conv} />
+            </div>
+          )}
+          {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
+        </div>
+      </button>
+
+      {/* Expanded detail section */}
+      {expanded && (
+        <div className="border-t border-rose-50 px-4 py-3 space-y-1">
+          {/* Description */}
+          <p className="text-[10px] text-gray-400 pb-2 leading-relaxed">{t('lab.learning_desc')}</p>
+
+          {!hasModel ? (
+            <p className="text-[11px] text-gray-400 text-center py-4">{t('lab.learning_conv_none')}</p>
+          ) : (
+            <>
+              {/* Outlier warning */}
+              {lastDiagnostics?.isOutlier && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-2">
+                  <AlertTriangle size={13} className="text-amber-500 mt-0.5 shrink-0" />
+                  <p className="text-[10px] font-medium text-amber-700">{t('lab.learning_outlier')}</p>
+                </div>
+              )}
+
+              {/* Parameters */}
+              <StatRow
+                label={t('lab.learning_amplitude')}
+                value={ampFactor !== null ? `×${ampFactor.toFixed(3)}` : '—'}
+                hint={t('lab.learning_amplitude_hint')}
+              />
+              <StatRow
+                label={t('lab.learning_clearance')}
+                value={clrFactor !== null ? `×${clrFactor.toFixed(3)}` : '—'}
+                hint={t('lab.learning_clearance_hint')}
+              />
+
+              {/* Convergence */}
+              <div className="py-1.5 border-b border-gray-50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-500">{t('lab.learning_convergence')}</span>
+                  <span className="text-[10px] font-bold text-gray-600">{convLabel}</span>
+                </div>
+                <ConvergenceBar score={conv} />
+                <p className="text-[10px] text-gray-400 mt-1">{t('lab.learning_convergence_tip')}</p>
+              </div>
+
+              {/* Last NIS */}
+              {lastDiagnostics && (
+                <>
+                  <StatRow
+                    label={t('lab.learning_nis')}
+                    value={
+                      <span className={lastDiagnostics.isOutlier ? 'text-amber-600' : 'text-emerald-600'}>
+                        {lastDiagnostics.NIS.toFixed(2)}
+                        {lastDiagnostics.isOutlier ? ' ⚠' : ' ✓'}
+                      </span>
+                    }
+                    hint={t('lab.learning_nis_hint')}
+                  />
+                  <StatRow
+                    label={t('lab.learning_pred')}
+                    value={`${lastDiagnostics.predictedPGmL.toFixed(1)} pg/mL`}
+                    hint={t('lab.learning_pred_hint')}
+                  />
+                  <StatRow
+                    label={t('lab.learning_obs_val')}
+                    value={`${lastDiagnostics.observedPGmL.toFixed(1)} pg/mL`}
+                    hint={t('lab.learning_obs_val_hint')}
+                  />
+                  <StatRow
+                    label={t('lab.learning_ci95')}
+                    value={`${lastDiagnostics.ci95Low.toFixed(0)} – ${lastDiagnostics.ci95High.toFixed(0)} pg/mL`}
+                    hint={t('lab.learning_ci95_hint')}
+                  />
+                  <StatRow
+                    label={t('lab.learning_residual')}
+                    value={
+                      <span className={lastDiagnostics.residualLog > 0 ? 'text-amber-600' : 'text-blue-600'}>
+                        {lastDiagnostics.residualLog > 0 ? '+' : ''}{lastDiagnostics.residualLog.toFixed(3)}
+                      </span>
+                    }
+                    hint={t('lab.learning_residual_hint')}
+                  />
+                </>
+              )}
+            </>
+          )}
+
+          {/* Reset button removed — model resets automatically when lab results are deleted */}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const LabView: React.FC<LabViewProps> = ({
   labResults,
-  currentTime,
-  calibrationFn,
+  personalModel,
+  lastDiagnostics,
+  applyE2LearningToCPA,
+  onSetApplyE2LearningToCPA,
   onAddLabResult,
   onEditLabResult,
   onClearLabResults,
@@ -40,6 +219,42 @@ const LabView: React.FC<LabViewProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Personal model learning panel */}
+      <LearningPanel
+        personalModel={personalModel}
+        lastDiagnostics={lastDiagnostics}
+      />
+      <div className="mx-4 bg-white rounded-2xl border border-gray-200 shadow-sm p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-gray-800">{t('lab.learning_apply_cpa')}</p>
+            <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">
+              {t('lab.learning_apply_cpa_desc')}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={applyE2LearningToCPA}
+            onClick={() => onSetApplyE2LearningToCPA(!applyE2LearningToCPA)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition ${
+              applyE2LearningToCPA
+                ? 'bg-rose-500 border-rose-500'
+                : 'bg-gray-200 border-gray-200'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${
+                applyE2LearningToCPA ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+        <p className="mt-2 text-[10px] font-semibold text-gray-400">
+          {applyE2LearningToCPA ? t('lab.learning_apply_cpa_on') : t('lab.learning_apply_cpa_off')}
+        </p>
       </div>
 
       {labResults.length === 0 ? (
@@ -81,10 +296,7 @@ const LabView: React.FC<LabViewProps> = ({
         </div>
       )}
 
-      <div className="mx-4 bg-white rounded-2xl border border-gray-200 shadow-sm flex items-center justify-between px-4 py-3">
-        <div className="text-xs text-gray-500">
-          {t('lab.tip_scale')} ×{calibrationFn(currentTime.getTime() / 3600000).toFixed(2)}
-        </div>
+      <div className="mx-4 bg-white rounded-2xl border border-gray-200 shadow-sm flex items-center justify-end px-4 py-3">
         <button
           onClick={onClearLabResults}
           disabled={!labResults.length}

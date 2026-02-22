@@ -171,7 +171,6 @@ const ShareView: React.FC = () => {
                 sim={simulation}
                 events={shareData.events}
                 labResults={shareData.labResults}
-                calibrationFn={calibrationFn}
                 onPointClick={() => {}} // Read-only
               />
             </div>

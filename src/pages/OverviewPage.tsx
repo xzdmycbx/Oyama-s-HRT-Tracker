@@ -11,7 +11,7 @@ interface OutletContext {
 
 const OverviewPage: React.FC = () => {
     const { onEditEvent, onOpenWeightModal } = useOutletContext<OutletContext>();
-    const { events, weight, labResults, simulation, currentTime, calibrationFn } = useAppData();
+    const { events, weight, labResults, simulation, currentTime, simCI } = useAppData();
 
     return (
         <OverviewView
@@ -20,7 +20,7 @@ const OverviewPage: React.FC = () => {
             labResults={labResults}
             simulation={simulation}
             currentTime={currentTime}
-            calibrationFn={calibrationFn}
+            simCI={simCI}
             onEditEvent={onEditEvent}
             onOpenWeightModal={onOpenWeightModal}
         />

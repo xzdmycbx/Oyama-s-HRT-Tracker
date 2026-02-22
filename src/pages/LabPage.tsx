@@ -12,13 +12,21 @@ interface OutletContext {
 
 const LabPage: React.FC = () => {
     const { onAddLabResult, onEditLabResult, onClearLabResults } = useOutletContext<OutletContext>();
-    const { labResults, currentTime, calibrationFn } = useAppData();
+    const {
+        labResults,
+        personalModel,
+        lastDiagnostics,
+        applyE2LearningToCPA,
+        setApplyE2LearningToCPA,
+    } = useAppData();
 
     return (
         <LabView
             labResults={labResults}
-            currentTime={currentTime}
-            calibrationFn={calibrationFn}
+            personalModel={personalModel}
+            lastDiagnostics={lastDiagnostics}
+            applyE2LearningToCPA={applyE2LearningToCPA}
+            onSetApplyE2LearningToCPA={setApplyE2LearningToCPA}
             onAddLabResult={onAddLabResult}
             onEditLabResult={onEditLabResult}
             onClearLabResults={onClearLabResults}

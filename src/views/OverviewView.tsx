@@ -1,9 +1,18 @@
 import React, { useMemo } from 'react';
 import { Activity, Settings, Info } from 'lucide-react';
 import { useTranslation } from '../contexts/LanguageContext';
-import { formatDate, formatTime } from '../utils/helpers';
 import ResultChart from '../components/ResultChart';
 import { DoseEvent, SimulationResult, LabResult, interpolateConcentration_E2, interpolateConcentration_CPA } from '../../logic';
+
+interface SimCI {
+    timeH: number[];
+    e2Adjusted: number[];
+    ci95Low: number[];
+    ci95High: number[];
+    cpaAdjusted: number[];
+    cpaCi95Low: number[];
+    cpaCi95High: number[];
+}
 
 interface OverviewViewProps {
   events: DoseEvent[];
@@ -11,9 +20,26 @@ interface OverviewViewProps {
   labResults: LabResult[];
   simulation: SimulationResult | null;
   currentTime: Date;
-  calibrationFn: (h: number) => number;
+  simCI?: SimCI | null;
   onEditEvent: (event: DoseEvent) => void;
   onOpenWeightModal: () => void;
+}
+
+/** Linear interpolation on a parallel timeH/values array pair */
+function interpAt(timeH: number[], values: number[], h: number): number {
+  if (!timeH.length || !values.length) return 0;
+  if (h <= timeH[0]) return values[0];
+  if (h >= timeH[timeH.length - 1]) return values[values.length - 1];
+  let lo = 0, hi = timeH.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (timeH[mid] <= h) lo = mid; else hi = mid;
+  }
+  const frac = (timeH[hi] - timeH[lo]) > 0
+    ? (h - timeH[lo]) / (timeH[hi] - timeH[lo])
+    : 0;
+  const v = values[lo] + frac * (values[hi] - values[lo]);
+  return isFinite(v) ? v : 0;
 }
 
 const OverviewView: React.FC<OverviewViewProps> = ({
@@ -22,25 +48,62 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   labResults,
   simulation,
   currentTime,
-  calibrationFn,
+  simCI,
   onEditEvent,
   onOpenWeightModal,
 }) => {
   const { t, lang } = useTranslation();
+  const h = currentTime.getTime() / 3600000;
 
-  const currentLevel = useMemo(() => {
-    if (!simulation) return 0;
-    const h = currentTime.getTime() / 3600000;
-    const baseE2 = interpolateConcentration_E2(simulation, h) || 0;
-    return baseE2 * calibrationFn(h);
-  }, [simulation, currentTime, calibrationFn]);
+  const hasPersonalModel = !!simCI && simCI.e2Adjusted.length > 0;
+  const hasPersonalCpaModel = !!simCI && simCI.cpaAdjusted.length === simCI.timeH.length && simCI.cpaAdjusted.length > 0;
 
-  const currentCPA = useMemo(() => {
+  const rawLevel = useMemo(() => {
     if (!simulation) return 0;
-    const h = currentTime.getTime() / 3600000;
-    const concCPA = interpolateConcentration_CPA(simulation, h) || 0;
-    return concCPA;
-  }, [simulation, currentTime]);
+    return interpolateConcentration_E2(simulation, h) || 0;
+  }, [simulation, h]);
+
+  const personalLevel = useMemo(() => {
+    if (!hasPersonalModel) return null;
+    const v = interpAt(simCI!.timeH, simCI!.e2Adjusted, h);
+    return (v > 0 && v < 5000) ? v : null;
+  }, [hasPersonalModel, simCI, h]);
+
+  // E2: personal value preferred when available.
+  const currentLevel = personalLevel ?? rawLevel;
+
+  // 95% CI bounds for E2 at current time
+  const currentCI = useMemo(() => {
+    if (!hasPersonalModel) return null;
+    const lo = interpAt(simCI!.timeH, simCI!.ci95Low, h);
+    const hi = interpAt(simCI!.timeH, simCI!.ci95High, h);
+    if (lo > 0 && hi > 0 && hi > lo) return { lo, hi };
+    return null;
+  }, [hasPersonalModel, simCI, h]);
+
+  const rawCPA = useMemo(() => {
+    if (!simulation) return 0;
+    return interpolateConcentration_CPA(simulation, h) || 0;
+  }, [simulation, h]);
+
+  const personalCPA = useMemo(() => {
+    if (!hasPersonalCpaModel) return null;
+    const v = interpAt(simCI!.timeH, simCI!.cpaAdjusted, h);
+    return (v > 0 && v < 5000) ? v : null;
+  }, [hasPersonalCpaModel, simCI, h]);
+
+  const currentCPA = personalCPA ?? rawCPA;
+
+  const currentCPACI = useMemo(() => {
+    if (!hasPersonalCpaModel) return null;
+    if (simCI!.cpaCi95Low.length !== simCI!.timeH.length || simCI!.cpaCi95High.length !== simCI!.timeH.length) {
+      return null;
+    }
+    const lo = interpAt(simCI!.timeH, simCI!.cpaCi95Low, h);
+    const hi = interpAt(simCI!.timeH, simCI!.cpaCi95High, h);
+    if (lo > 0 && hi > 0 && hi > lo) return { lo, hi };
+    return null;
+  }, [hasPersonalCpaModel, simCI, h]);
 
   const getLevelStatus = (conc: number) => {
     if (conc > 300) return { label: 'status.level.high', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' };
@@ -52,11 +115,12 @@ const OverviewView: React.FC<OverviewViewProps> = ({
   };
 
   const currentStatus = useMemo(() => {
-    if (currentLevel > 0) {
-      return getLevelStatus(currentLevel);
-    }
+    if (currentLevel > 0) return getLevelStatus(currentLevel);
     return null;
   }, [currentLevel]);
+
+  const formatHeadlineE2 = (v: number) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
+  const formatHeadlineCPA = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
   return (
     <>
@@ -67,6 +131,11 @@ const OverviewView: React.FC<OverviewViewProps> = ({
               <h1 className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-50 text-[11px] md:text-xs font-semibold text-gray-700 border border-gray-200">
                 <Activity size={14} className="text-gray-500" />
                 {t('status.estimate')}
+                {hasPersonalModel && (
+                  <span className="ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-500 border border-rose-100">
+                    {t('chart.personal_model')}
+                  </span>
+                )}
               </h1>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -79,7 +148,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                   {currentLevel > 0 ? (
                     <>
                       <span className="text-4xl md:text-5xl font-black text-pink-500 tracking-tight">
-                        {currentLevel.toFixed(0)}
+                        {formatHeadlineE2(currentLevel)}
                       </span>
                       <span className="text-sm md:text-base font-bold text-pink-300 mb-1">pg/mL</span>
                     </>
@@ -89,8 +158,36 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                     </span>
                   )}
                 </div>
+                {/* 95% CI from personal model */}
+                {currentCI && (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] font-bold text-pink-300 uppercase tracking-wide">95% CI</span>
+                    <span className="text-[11px] font-semibold text-pink-400">
+                      {currentCI.lo.toFixed(0)} – {currentCI.hi.toFixed(0)}
+                      <span className="text-[9px] font-normal text-pink-300 ml-0.5">pg/mL</span>
+                    </span>
+                  </div>
+                )}
+                {personalLevel !== null && (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] font-bold text-rose-300 uppercase tracking-wide">
+                      {t('chart.personal_model')}
+                    </span>
+                    <span className="text-[10px] font-semibold text-rose-500">
+                      {personalLevel.toFixed(1)} pg/mL
+                    </span>
+                  </div>
+                )}
+                {hasPersonalModel && rawLevel > 0 && (
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Raw</span>
+                    <span className="text-[10px] font-semibold text-gray-500">
+                      {rawLevel.toFixed(1)} pg/mL
+                    </span>
+                  </div>
+                )}
                 {currentStatus && (
-                  <div className={`px-2.5 py-1 rounded-lg border ${currentStatus.bg} ${currentStatus.border} flex items-center gap-1.5 mt-2 w-fit`}>
+                  <div className={`px-2.5 py-1 rounded-lg border ${currentStatus.bg} ${currentStatus.border} flex items-center gap-1.5 mt-1 w-fit`}>
                     <Info size={10} className={currentStatus.color} />
                     <span className={`text-[9px] md:text-[10px] font-bold ${currentStatus.color}`}>
                       {t(currentStatus.label)}
@@ -98,6 +195,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                   </div>
                 )}
               </div>
+
               {/* CPA Display */}
               <div className="space-y-1">
                 <div className="text-[10px] md:text-xs font-bold text-purple-400 uppercase tracking-wider">
@@ -107,7 +205,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                   {currentCPA > 0 ? (
                     <>
                       <span className="text-4xl md:text-5xl font-black text-purple-600 tracking-tight">
-                        {currentCPA.toFixed(0)}
+                        {formatHeadlineCPA(currentCPA)}
                       </span>
                       <span className="text-sm md:text-base font-bold text-purple-300 mb-1">ng/mL</span>
                     </>
@@ -117,9 +215,41 @@ const OverviewView: React.FC<OverviewViewProps> = ({
                     </span>
                   )}
                 </div>
+                {hasPersonalCpaModel && currentCPA > 0 && (
+                  <>
+                    {currentCPACI && (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[9px] font-bold text-purple-300 uppercase tracking-wide">95% CI</span>
+                        <span className="text-[11px] font-semibold text-purple-400">
+                          {currentCPACI.lo.toFixed(2)} - {currentCPACI.hi.toFixed(2)}
+                          <span className="text-[9px] font-normal text-purple-300 ml-0.5">ng/mL</span>
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-[9px] font-bold text-purple-300 uppercase tracking-wide">
+                        {t('chart.personal_model')}
+                      </span>
+                      {personalCPA !== null && (
+                        <span className="text-[10px] font-semibold text-purple-500">
+                          {personalCPA.toFixed(2)} ng/mL
+                        </span>
+                      )}
+                    </div>
+                    {rawCPA > 0 && (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wide">Raw</span>
+                        <span className="text-[10px] font-semibold text-gray-500">
+                          {rawCPA.toFixed(2)} ng/mL
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </div>
+
           <div className="grid grid-cols-2 md:grid-cols-1 gap-3">
             <div className="flex items-center gap-3 p-4 rounded-2xl bg-white border border-gray-200 shadow-sm">
               <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center border border-gray-200">
@@ -152,7 +282,7 @@ const OverviewView: React.FC<OverviewViewProps> = ({
           events={events}
           onPointClick={onEditEvent}
           labResults={labResults}
-          calibrationFn={calibrationFn}
+          simCI={simCI}
         />
       </main>
     </>
